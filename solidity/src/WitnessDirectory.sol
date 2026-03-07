@@ -11,6 +11,9 @@ import { IWitnessDirectory } from "./IWitnessDirectory.sol";
  * @notice
  */
 contract WitnessDirectory is IWitnessDirectory, Ownable {
+  error Index0();
+  error IndexTooHigh();
+
   /// bytes9(keccak256(bytes("_SIGNER_SLOT_SEED")))
   /// @dev The signer slot is given by:
   /// ```
@@ -33,7 +36,8 @@ contract WitnessDirectory is IWitnessDirectory, Ownable {
     address signer,
     uint256 index
   ) internal {
-    // todo: Index is less than 256.
+    if (index == 0) revert Index0();
+    if (index > type(uint8).max) revert IndexTooHigh();
     assembly ("memory-safe") {
       mstore(0x00, index) // places index at position 31.
       mstore(32, _SIGNER_SLOT_SEED) // Places _SIGNER_SLOT_SEED from 32 to 41
@@ -46,7 +50,8 @@ contract WitnessDirectory is IWitnessDirectory, Ownable {
   function _getSigner(
     uint256 index
   ) internal view returns (address signer) {
-    // todo: Index is less than 256.
+    if (index == 0) revert Index0();
+    if (index > type(uint8).max) revert IndexTooHigh();
     assembly ("memory-safe") {
       mstore(0x00, index) // places index at position 31.
       mstore(0x20, _SIGNER_SLOT_SEED) // Places _SIGNER_SLOT_SEED from 32 to 41
@@ -60,8 +65,6 @@ contract WitnessDirectory is IWitnessDirectory, Ownable {
     uint256 index,
     uint256 _qourum
   ) external onlyOwner {
-    // TODO: Disallow index 0.
-    // TODO: REquire index < 256
     _setSigner(signer, index);
     qourum = _qourum;
   }

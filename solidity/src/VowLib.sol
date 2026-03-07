@@ -27,6 +27,7 @@ library VowLib {
 
   error InvalidlySignedRoot();
   error InvalidMerkleProof();
+  error TooManyTopics();  // 0x643f8f9e
 
   bytes32 private constant VOW_TYPE_HASH =
     keccak256(bytes("Vow(uint256 chainId,uint256 latestBlockNumber,uint256 rootBlockNumber,bytes32 root)"));
@@ -103,9 +104,17 @@ library VowLib {
    * │         │ (32 B)   │ (32 B)   │     │ (32 B)   │           │
    * │         └──────────┴──────────┴─────┴──────────┘           │
    * │                                                            │
+   * │  ════════════ SIGNER INDICES (S bytes) ══════════════════  │
+   * │                                                            │
+   * │       Byte 100 + P × 32               100 + P × 32 + S     │
+   * │            ┌────────┬────────┬─────┬────────┐              │
+   * │            │ idx[0] │ idx[1] │ ... │ idx[S] │              │
+   * │            │ (1 B)  │ (1 B)  │     │ (1 B)  │              │
+   * │            └────────┴────────┴─────┴────────┘              │
+   * │                                                            │
    * │  ═══════════ SIGNATURES (variable) ══════════════════════  │
    * │                                                            │
-   * │   100 + P × 32                                             │
+   * │   100 + P × 32 + S                                         │
    * │     ┌─────────┬──────────┬─────┬─────────┬──────────┐      │
    * │     │ sLen[0] │  sig[0]  │ ... │ sLen[0] │  sig[S]  │      │
    * │     │  (2B)   │(sLen[0]B)│     │  (2B)   │(sLen[S]B)│      │
@@ -145,10 +154,11 @@ library VowLib {
     uint256 S;
     uint256 E;
     assembly ("memory-safe") {
-      let varLengths := calldataload(add(vow.offset, add(96, 4)))
-      Psize := shr(mul(8, sub(32, 4)), varLengths)
-      S := shl(mul(8, 1), shr(mul(8, sub(32, 3)), varLengths))
-      E := shl(mul(8, 2), shr(mul(8, sub(32, 2)), varLengths))
+      let varLengths := calldataload(add(vow.offset, 96))
+      // Header descriptor at bytes [96..99]: P(1) | S(1) | E(2), big-endian.
+      Psize := shl(5, byte(0, varLengths))
+      S := byte(1, varLengths)
+      E := or(shl(8, byte(2, varLengths)), byte(3, varLengths))
 
       evt.offset := sub(add(vow.offset, vow.length), E)
       evt.length := E
@@ -181,7 +191,7 @@ library VowLib {
     bool valid = true;
     uint256 counter;
     assembly ("memory-safe") {
-      counter := add(100, Psize)
+      counter := add(add(100, Psize), S)
     }
     for (uint256 i = 0; i < numSigners; ++i) {
       bytes calldata signature;
@@ -247,7 +257,8 @@ library VowLib {
       let numTopics32 := mul(topics.length, 32)
       // Topics has to be less than or equal to 4
       if gt(numTopics32, mul(4, 32)) {
-      // todo: Raise error.
+        mstore(0x00, 0x643f8f9e) // `TooManyTopics()`.
+        revert(0x1c, 0x04)
       }
       // 20 for emitter. + 1 for numTopics. 32 for each topic and then data.
       // numTopics is bounded by above.
@@ -282,7 +293,12 @@ library VowLib {
       // Extract the emitter from the evt.
       emitter := shr(mul(8, 12), word)
       // clear address from word and then clear beginning of topics.
-      topics.length := shr(mul(31, 8), shl(mul(20, 8), word))
+      let numTopics := shr(mul(31, 8), shl(mul(20, 8), word))
+      if gt(numTopics, 4) {
+        mstore(0x00, 0x643f8f9e) // `TooManyTopics()`.
+        revert(0x1c, 0x04)
+      }
+      topics.length := numTopics
       topics.offset := add(evt.offset, 21)
       // TODO: overflow
       let topicsEnd := add(mul(topics.length, 32), 21)

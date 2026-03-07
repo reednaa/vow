@@ -157,6 +157,37 @@ contract WitnessDirectoryTest is Test {
     d.getQourumSet(_indexMap(_asArray(2, 1)));
   }
 
+  function test_getQourumSet_supports_index_255() external {
+    vm.startPrank(OWNER);
+    d.setSigner(ALICE, 255, 1);
+    vm.stopPrank();
+
+    address[] memory signers = d.getQourumSet(_indexMap(_asArray(255)));
+
+    assertEq(signers.length, 1);
+    assertEq(signers[0], ALICE);
+  }
+
+  // Finding: index 0 is used as a sentinel in getQourumSet and should be rejected at write time.
+  function test_revertIf_setSigner_allows_index_zero() external {
+    vm.prank(OWNER);
+    vm.expectRevert();
+    d.setSigner(ALICE, 0, 1);
+  }
+
+  // Finding: indexes above 255 collide with lower-byte indexes.
+  function test_setSigner_indexes_above_255_do_not_collide() external {
+    vm.startPrank(OWNER);
+    d.setSigner(ALICE, 1, 0);
+    vm.expectRevert(abi.encodeWithSelector(WitnessDirectory.IndexTooHigh.selector));
+    d.setSigner(BOB, 257, 0);
+    vm.stopPrank();
+
+    assertEq(d.getSigner(1), ALICE);
+    vm.expectRevert(abi.encodeWithSelector(WitnessDirectory.IndexTooHigh.selector));
+    d.getSigner(257);
+  }
+
   function _indexMap(
     uint8[] memory indices
   ) internal pure returns (uint256 map) {

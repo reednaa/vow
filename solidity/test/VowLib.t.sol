@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import { Test } from "forge-std/Test.sol";
 
 import { VowLib } from "../src/VowLib.sol";
+import { WitnessDirectory } from "../src/WitnessDirectory.sol";
 
 contract MockEvent {
   function encodeEvent(
@@ -236,6 +237,18 @@ contract MockEvent {
       mstore(add(add(dst, totalSize), 0), 0)
     }
   }
+
+  function encodeVowExternal(
+    uint256 chainId,
+    uint256 latestBlockNumber,
+    uint256 rootBlockNumber,
+    bytes32[] calldata proof,
+    uint8[] calldata signerIndices,
+    bytes[] calldata signatures,
+    bytes calldata evt
+  ) external pure returns (bytes memory encoded) {
+    encoded = encodeVow(chainId, latestBlockNumber, rootBlockNumber, proof, signerIndices, signatures, evt);
+  }
 }
 
 contract EventLibTest is Test {
@@ -252,6 +265,18 @@ contract EventLibTest is Test {
   ) external {
     bytes32[] memory ct = new bytes32[](1);
     ct[0] = topics[0];
+
+    bytes memory referenceEncode = v.referenceEvent(emitter, ct, data);
+    bytes memory libEncode = v.encodeEvent(emitter, ct, data);
+
+    assertEq(referenceEncode, libEncode);
+  }
+
+  function test_compare_event_encode_0_topic(
+    address emitter,
+    bytes calldata data
+  ) external {
+    bytes32[] memory ct = new bytes32[](0);
 
     bytes memory referenceEncode = v.referenceEvent(emitter, ct, data);
     bytes memory libEncode = v.encodeEvent(emitter, ct, data);
@@ -325,5 +350,93 @@ contract EventLibTest is Test {
     assertEq(emitter, decodedEmitter);
     assertEq(ct, decodedTopics);
     assertEq(data, decodedData);
+  }
+}
+
+contract VowLibFindingsTest is Test {
+  MockEvent v;
+  WitnessDirectory directory;
+  uint256 signerPk;
+  address signer;
+  address secondSigner;
+
+  function setUp() external {
+    v = new MockEvent();
+    directory = new WitnessDirectory(address(this));
+
+    signerPk = 0xA11CE;
+    signer = vm.addr(signerPk);
+    secondSigner = address(0xC0FFEE);
+
+    // Seed the directory with deterministic test witnesses.
+    directory.setSigner(signer, 1, 1);
+    directory.setSigner(secondSigner, 2, 1);
+  }
+
+  // Finding: processVow does not parse P/S/E from the documented header fields.
+  function test_processVow_accepts_spec_valid_payload() external {
+    uint256 chainId = 10;
+    uint256 latestBlockNumber = 500;
+    uint256 rootBlockNumber = 490;
+
+    bytes32[] memory topics = new bytes32[](2);
+    topics[0] = keccak256("Topic0");
+    topics[1] = keccak256("Topic1");
+    bytes memory eventData = abi.encode(uint256(123), address(0xABCD));
+    bytes memory evt = v.referenceEvent(address(0xBEEF), topics, eventData);
+
+    bytes32[] memory proof = new bytes32[](1);
+    proof[0] = bytes32(0);
+    bytes32 leaf = v.leafHash(evt);
+    bytes32 root = v.computeMerkleRootCalldata(proof, leaf);
+
+    bytes32 digest = v.hashTypedData(v.vowTypehash(chainId, latestBlockNumber, rootBlockNumber, root));
+    (uint8 vv, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
+    bytes[] memory signatures = new bytes[](1);
+    signatures[0] = abi.encodePacked(r, s, vv);
+    uint8[] memory signerIndices = new uint8[](1);
+    signerIndices[0] = 1;
+
+    bytes memory vow = v.encodeVowExternal(
+      chainId,
+      latestBlockNumber,
+      rootBlockNumber,
+      proof,
+      signerIndices,
+      signatures,
+      evt
+    );
+
+    (
+      uint256 gotChainId,
+      uint256 gotLatestBlockNumber,
+      uint256 gotRootBlockNumber,
+      address emitter,
+      bytes32[] memory gotTopics,
+      bytes memory gotData
+    ) = v.processVow(address(directory), vow);
+
+    assertEq(gotChainId, chainId);
+    assertEq(gotLatestBlockNumber, latestBlockNumber);
+    assertEq(gotRootBlockNumber, rootBlockNumber);
+    assertEq(emitter, address(0xBEEF));
+    assertEq(gotTopics, topics);
+    assertEq(gotData, eventData);
+  }
+
+  // Finding: decodeEvent accepts topic counts above 4.
+  function test_revertIf_decodeEvent_has_more_than_4_topics() external {
+    bytes memory evt = abi.encodePacked(
+      address(0xBEEF),
+      uint8(5),
+      bytes32(uint256(1)),
+      bytes32(uint256(2)),
+      bytes32(uint256(3)),
+      bytes32(uint256(4)),
+      bytes32(uint256(5))
+    );
+
+    vm.expectRevert(abi.encodeWithSelector(VowLib.TooManyTopics.selector));
+    v.decodeEvent(evt);
   }
 }
