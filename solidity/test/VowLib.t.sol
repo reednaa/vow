@@ -28,7 +28,9 @@ contract MockEvent {
     (emitter, topics, data) = VowLib.decodeEvent(evt);
   }
 
-  function leafHash(bytes calldata dat) external pure returns (bytes32) {
+  function leafHash(
+    bytes calldata dat
+  ) external pure returns (bytes32) {
     return VowLib._leafHash(dat);
   }
 
@@ -42,14 +44,18 @@ contract MockEvent {
   function processVow(
     address directry,
     bytes calldata vow
-  ) external view returns (
-    uint256 chainId,
-    uint256 latestBlockNumber,
-    uint256 rootBlockNumber,
-    address emitter,
-    bytes32[] calldata topics,
-    bytes calldata data
-  ) {
+  )
+    external
+    view
+    returns (
+      uint256 chainId,
+      uint256 latestBlockNumber,
+      uint256 rootBlockNumber,
+      address emitter,
+      bytes32[] calldata topics,
+      bytes calldata data
+    )
+  {
     return VowLib.processVow(directry, vow);
   }
 
@@ -61,14 +67,7 @@ contract MockEvent {
     address[] memory signers,
     bytes[] calldata signatures
   ) external view {
-    return VowLib._verifySignedVow(
-      chainId,
-      latestBlockNumber,
-      rootBlockNumber,
-      root,
-      signers,
-      signatures
-    );
+    return VowLib._verifySignedVow(chainId, latestBlockNumber, rootBlockNumber, root, signers, signatures);
   }
 
   function hashTypedData(
@@ -76,7 +75,7 @@ contract MockEvent {
   ) external pure returns (bytes32 digest) {
     return VowLib._hashTypedData(structHash);
   }
-  
+
   function vowTypehash(
     uint256 chainId,
     uint256 latestBlockNumber,
@@ -87,7 +86,7 @@ contract MockEvent {
   }
 
   /// @notice Encodes a vow in plain Solidity.
-function encodeVow(
+  function encodeVow(
     uint256 chainId,
     uint256 latestBlockNumber,
     uint256 rootBlockNumber,
@@ -95,7 +94,7 @@ function encodeVow(
     uint8[] calldata signerIndices,
     bytes[] calldata signatures,
     bytes calldata evt
-) internal pure returns (bytes memory encoded) {
+  ) internal pure returns (bytes memory encoded) {
     uint256 P = proof.length;
     uint256 S = signerIndices.length;
     require(S == signatures.length, "signer/sig mismatch");
@@ -104,7 +103,7 @@ function encodeVow(
     // Compute total sig section size: Σ(2 + sLen[i])
     uint256 sigsSize;
     for (uint256 i = 0; i < S; ++i) {
-        sigsSize += 2 + signatures[i].length;
+      sigsSize += 2 + signatures[i].length;
     }
 
     uint256 totalSize = 100 + P * 32 + S + sigsSize + evt.length;
@@ -112,10 +111,10 @@ function encodeVow(
 
     // --- Header ---
     assembly {
-        let dst := add(encoded, 32) // skip length prefix
-        mstore(dst, chainId)
-        mstore(add(dst, 32), latestBlockNumber)
-        mstore(add(dst, 64), rootBlockNumber)
+      let dst := add(encoded, 32) // skip length prefix
+      mstore(dst, chainId)
+      mstore(add(dst, 32), latestBlockNumber)
+      mstore(add(dst, 64), rootBlockNumber)
     }
     // Descriptor: P(1B) | S(1B) | E(2B) at byte 96
     encoded[96] = bytes1(uint8(P));
@@ -127,42 +126,42 @@ function encodeVow(
 
     // --- Proof ---
     for (uint256 i = 0; i < P; ++i) {
-        bytes32 node = proof[i];
-        assembly {
-            mstore(add(add(encoded, 32), cursor), node)
-        }
-        cursor += 32;
+      bytes32 node = proof[i];
+      assembly {
+        mstore(add(add(encoded, 32), cursor), node)
+      }
+      cursor += 32;
     }
 
     // --- Signer Indices ---
     for (uint256 i = 0; i < S; ++i) {
-        encoded[cursor] = bytes1(signerIndices[i]);
-        cursor += 1;
+      encoded[cursor] = bytes1(signerIndices[i]);
+      cursor += 1;
     }
 
     // --- Signatures (interleaved: sLen[i] || sig[i]) ---
     for (uint256 i = 0; i < S; ++i) {
-        uint256 sLen = signatures[i].length;
-        // Write uint16 big-endian length
-        encoded[cursor]     = bytes1(uint8(sLen >> 8));
-        encoded[cursor + 1] = bytes1(uint8(sLen));
-        cursor += 2;
-        // Copy signature bytes
-        bytes calldata sig = signatures[i];
-        for (uint256 j = 0; j < sLen; ++j) {
-            encoded[cursor + j] = sig[j];
-        }
-        cursor += sLen;
+      uint256 sLen = signatures[i].length;
+      // Write uint16 big-endian length
+      encoded[cursor] = bytes1(uint8(sLen >> 8));
+      encoded[cursor + 1] = bytes1(uint8(sLen));
+      cursor += 2;
+      // Copy signature bytes
+      bytes calldata sig = signatures[i];
+      for (uint256 j = 0; j < sLen; ++j) {
+        encoded[cursor + j] = sig[j];
+      }
+      cursor += sLen;
     }
 
     // --- EVT ---
     for (uint256 j = 0; j < evt.length; ++j) {
-        encoded[cursor + j] = evt[j];
+      encoded[cursor + j] = evt[j];
     }
-}
+  }
 
-/// @notice Encodes a vow in assembly.
-function encodeVowAssembly(
+  /// @notice Encodes a vow in assembly.
+  function encodeVowAssembly(
     uint256 chainId,
     uint256 latestBlockNumber,
     uint256 rootBlockNumber,
@@ -170,73 +169,73 @@ function encodeVowAssembly(
     uint8[] calldata signerIndices,
     bytes[] calldata signatures,
     bytes calldata evt
-) internal pure returns (bytes memory encoded) {
+  ) internal pure returns (bytes memory encoded) {
     assembly ("memory-safe") {
-        let P := proof.length
-        let S := signerIndices.length
+      let P := proof.length
+      let S := signerIndices.length
 
-        // --- Compute total signatures section size: Σ(2 + sLen[i]) ---
-        let sigsSize := mul(S, 2) // S × 2 bytes for length prefixes
-        for { let i := 0 } lt(i, S) { i := add(i, 1) } {
-            // Each element in bytes[] calldata: offset at signatures.offset + i*32
-            // points to a (length, data) pair relative to the start of the array.
-            let relOffset := calldataload(add(signatures.offset, mul(i, 0x20)))
-            let sigLen := calldataload(add(signatures.offset, relOffset))
-            sigsSize := add(sigsSize, sigLen)
-        }
+      // --- Compute total signatures section size: Σ(2 + sLen[i]) ---
+      let sigsSize := mul(S, 2) // S × 2 bytes for length prefixes
+      for { let i := 0 } lt(i, S) { i := add(i, 1) } {
+        // Each element in bytes[] calldata: offset at signatures.offset + i*32
+        // points to a (length, data) pair relative to the start of the array.
+        let relOffset := calldataload(add(signatures.offset, mul(i, 0x20)))
+        let sigLen := calldataload(add(signatures.offset, relOffset))
+        sigsSize := add(sigsSize, sigLen)
+      }
 
-        let totalSize := add(add(add(100, mul(P, 32)), S), add(sigsSize, evt.length))
+      let totalSize := add(add(add(100, mul(P, 32)), S), add(sigsSize, evt.length))
 
-        // Allocate
-        encoded := mload(0x40)
-        mstore(0x40, add(add(encoded, 0x20), totalSize))
-        mstore(encoded, totalSize)
+      // Allocate
+      encoded := mload(0x40)
+      mstore(0x40, add(add(encoded, 0x20), totalSize))
+      mstore(encoded, totalSize)
 
-        let dst := add(encoded, 0x20)
+      let dst := add(encoded, 0x20)
 
-        // --- Header (100 bytes) ---
-        mstore(dst, chainId)
-        mstore(add(dst, 32), latestBlockNumber)
-        mstore(add(dst, 64), rootBlockNumber)
-        // Descriptor at byte 96: P(1) | S(1) | E(2) packed into 4 bytes
-        // Build: P << 24 | S << 16 | E
-        let descriptor := or(or(shl(24, P), shl(16, S)), evt.length)
-        // Write 4 bytes at offset 96. We store a full word and it will
-        // be overwritten by subsequent writes past byte 100.
-        mstore(add(dst, 96), shl(224, descriptor))
+      // --- Header (100 bytes) ---
+      mstore(dst, chainId)
+      mstore(add(dst, 32), latestBlockNumber)
+      mstore(add(dst, 64), rootBlockNumber)
+      // Descriptor at byte 96: P(1) | S(1) | E(2) packed into 4 bytes
+      // Build: P << 24 | S << 16 | E
+      let descriptor := or(or(shl(24, P), shl(16, S)), evt.length)
+      // Write 4 bytes at offset 96. We store a full word and it will
+      // be overwritten by subsequent writes past byte 100.
+      mstore(add(dst, 96), shl(224, descriptor))
 
-        let cursor := add(dst, 100)
+      let cursor := add(dst, 100)
 
-        // --- Proof (P × 32 bytes) ---
-        calldatacopy(cursor, proof.offset, mul(P, 32))
-        cursor := add(cursor, mul(P, 32))
+      // --- Proof (P × 32 bytes) ---
+      calldatacopy(cursor, proof.offset, mul(P, 32))
+      cursor := add(cursor, mul(P, 32))
 
-        // --- Signer Indices (S bytes) ---
-        calldatacopy(cursor, signerIndices.offset, S)
-        cursor := add(cursor, S)
+      // --- Signer Indices (S bytes) ---
+      calldatacopy(cursor, signerIndices.offset, S)
+      cursor := add(cursor, S)
 
-        // --- Signatures (interleaved: uint16 len || sig data) ---
-        for { let i := 0 } lt(i, S) { i := add(i, 1) } {
-            let relOffset := calldataload(add(signatures.offset, mul(i, 0x20)))
-            let sigDataOffset := add(signatures.offset, add(relOffset, 0x20))
-            let sigLen := calldataload(add(signatures.offset, relOffset))
+      // --- Signatures (interleaved: uint16 len || sig data) ---
+      for { let i := 0 } lt(i, S) { i := add(i, 1) } {
+        let relOffset := calldataload(add(signatures.offset, mul(i, 0x20)))
+        let sigDataOffset := add(signatures.offset, add(relOffset, 0x20))
+        let sigLen := calldataload(add(signatures.offset, relOffset))
 
-            // Write uint16 big-endian length (2 bytes)
-            mstore(cursor, shl(240, sigLen))
-            cursor := add(cursor, 2)
+        // Write uint16 big-endian length (2 bytes)
+        mstore(cursor, shl(240, sigLen))
+        cursor := add(cursor, 2)
 
-            // Copy signature data
-            calldatacopy(cursor, sigDataOffset, sigLen)
-            cursor := add(cursor, sigLen)
-        }
+        // Copy signature data
+        calldatacopy(cursor, sigDataOffset, sigLen)
+        cursor := add(cursor, sigLen)
+      }
 
-        // --- EVT ---
-        calldatacopy(cursor, evt.offset, evt.length)
+      // --- EVT ---
+      calldatacopy(cursor, evt.offset, evt.length)
 
-        // Clean the last word (zero out any trailing garbage)
-        mstore(add(add(dst, totalSize), 0), 0)
+      // Clean the last word (zero out any trailing garbage)
+      mstore(add(add(dst, totalSize), 0), 0)
     }
-}
+  }
 }
 
 contract EventLibTest is Test {
