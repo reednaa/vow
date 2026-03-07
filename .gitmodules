@@ -1,0 +1,3 @@
+[submodule "solidity/lib/solady"]
+	path = solidity/lib/solady
+	url = https://github.com/Vectorized/solady

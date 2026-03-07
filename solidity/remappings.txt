@@ -1,0 +1,2 @@
+forge-std/=lib/solady/test/utils/forge-std/
+solady/=lib/solady/

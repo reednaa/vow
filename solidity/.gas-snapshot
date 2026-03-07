@@ -1,0 +1,4 @@
+VowLibTest:test_compare_vow_encode_1_topic(address,bytes32[1],bytes) (runs: 257, μ: 11965, ~: 11936)
+VowLibTest:test_compare_vow_encode_2_topic(address,bytes32[2],bytes) (runs: 257, μ: 12272, ~: 12243)
+VowLibTest:test_compare_vow_encode_3_topic(address,bytes32[3],bytes) (runs: 257, μ: 12481, ~: 12455)
+VowLibTest:test_compare_vow_encode_4_topic(address,bytes32[4],bytes) (runs: 257, μ: 12809, ~: 12775)
