@@ -12,7 +12,7 @@ import { createEnvSigner, computeVowDigest } from "../src/core/signing";
 import { type ConsistentBlockResult } from "../src/rpc/consistency";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
-const TEST_CHAIN_ID = 99991;
+const TEST_CHAIN_ID = 99993;
 const CAIP2 = `eip155:${TEST_CHAIN_ID}`;
 const API_PORT = 13003;
 
