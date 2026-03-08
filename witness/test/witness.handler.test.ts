@@ -4,7 +4,6 @@ import { type Address, type Hex } from "viem";
 import { Elysia } from "elysia";
 import { createDb, closeDb } from "../src/db/client";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../src/db/schema";
-import { sql } from "drizzle-orm";
 import { createWitnessController } from "../src/api/witness.handler";
 import { createHealthServer } from "../src/api/health.server";
 import { encodeEvent, computeLeafHash } from "../src/core/encoding";
@@ -60,8 +59,6 @@ beforeAll(async () => {
   await db.delete(indexedBlocks).where(eq(indexedBlocks.chainId, TEST_CHAIN_ID));
   await db.delete(rpcs).where(eq(rpcs.chainId, TEST_CHAIN_ID));
   await db.delete(chains).where(eq(chains.chainId, TEST_CHAIN_ID));
-  await db.execute(sql`DELETE FROM graphile_worker._private_jobs WHERE key LIKE ${"index:" + TEST_CHAIN_ID + ":%"}`);
-
   // Seed chain
   await db.insert(chains).values({
     chainId: TEST_CHAIN_ID,
