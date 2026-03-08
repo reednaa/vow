@@ -50,7 +50,6 @@ contract MockEvent {
     view
     returns (
       uint256 chainId,
-      uint256 latestBlockNumber,
       uint256 rootBlockNumber,
       address emitter,
       bytes32[] calldata topics,
@@ -62,13 +61,12 @@ contract MockEvent {
 
   function verifySignedVow(
     uint256 chainId,
-    uint256 latestBlockNumber,
     uint256 rootBlockNumber,
     bytes32 root,
     address[] memory signers,
     bytes[] calldata signatures
   ) external view {
-    return VowLib._verifySignedVow(chainId, latestBlockNumber, rootBlockNumber, root, signers, signatures);
+    return VowLib._verifySignedVow(chainId, rootBlockNumber, root, signers, signatures);
   }
 
   function hashTypedData(
@@ -79,17 +77,15 @@ contract MockEvent {
 
   function vowTypehash(
     uint256 chainId,
-    uint256 latestBlockNumber,
     uint256 rootBlockNumber,
     bytes32 root
   ) external pure returns (bytes32 vowHash) {
-    return VowLib.vowTypehash(chainId, latestBlockNumber, rootBlockNumber, root);
+    return VowLib.vowTypehash(chainId, rootBlockNumber, root);
   }
 
   /// @notice Encodes a vow in plain Solidity.
   function encodeVow(
     uint256 chainId,
-    uint256 latestBlockNumber,
     uint256 rootBlockNumber,
     bytes32[] calldata proof,
     uint8[] calldata signerIndices,
@@ -107,23 +103,22 @@ contract MockEvent {
       sigsSize += 2 + signatures[i].length;
     }
 
-    uint256 totalSize = 100 + P * 32 + S + sigsSize + evt.length;
+    uint256 totalSize = 68 + P * 32 + S + sigsSize + evt.length;
     encoded = new bytes(totalSize);
 
     // --- Header ---
     assembly {
       let dst := add(encoded, 32) // skip length prefix
       mstore(dst, chainId)
-      mstore(add(dst, 32), latestBlockNumber)
-      mstore(add(dst, 64), rootBlockNumber)
+      mstore(add(dst, 32), rootBlockNumber)
     }
-    // Descriptor: P(1B) | S(1B) | E(2B) at byte 96
-    encoded[96] = bytes1(uint8(P));
-    encoded[97] = bytes1(uint8(S));
-    encoded[98] = bytes1(uint8(evt.length >> 8));
-    encoded[99] = bytes1(uint8(evt.length));
+    // Descriptor: P(1B) | S(1B) | E(2B) at byte 64
+    encoded[64] = bytes1(uint8(P));
+    encoded[65] = bytes1(uint8(S));
+    encoded[66] = bytes1(uint8(evt.length >> 8));
+    encoded[67] = bytes1(uint8(evt.length));
 
-    uint256 cursor = 100;
+    uint256 cursor = 68;
 
     // --- Proof ---
     for (uint256 i = 0; i < P; ++i) {
@@ -164,7 +159,6 @@ contract MockEvent {
   /// @notice Encodes a vow in assembly.
   function encodeVowAssembly(
     uint256 chainId,
-    uint256 latestBlockNumber,
     uint256 rootBlockNumber,
     bytes32[] calldata proof,
     uint8[] calldata signerIndices,
@@ -185,7 +179,7 @@ contract MockEvent {
         sigsSize := add(sigsSize, sigLen)
       }
 
-      let totalSize := add(add(add(100, mul(P, 32)), S), add(sigsSize, evt.length))
+      let totalSize := add(add(add(68, mul(P, 32)), S), add(sigsSize, evt.length))
 
       // Allocate
       encoded := mload(0x40)
@@ -194,18 +188,17 @@ contract MockEvent {
 
       let dst := add(encoded, 0x20)
 
-      // --- Header (100 bytes) ---
+      // --- Header (68 bytes) ---
       mstore(dst, chainId)
-      mstore(add(dst, 32), latestBlockNumber)
-      mstore(add(dst, 64), rootBlockNumber)
-      // Descriptor at byte 96: P(1) | S(1) | E(2) packed into 4 bytes
+      mstore(add(dst, 32), rootBlockNumber)
+      // Descriptor at byte 64: P(1) | S(1) | E(2) packed into 4 bytes
       // Build: P << 24 | S << 16 | E
       let descriptor := or(or(shl(24, P), shl(16, S)), evt.length)
-      // Write 4 bytes at offset 96. We store a full word and it will
-      // be overwritten by subsequent writes past byte 100.
-      mstore(add(dst, 96), shl(224, descriptor))
+      // Write 4 bytes at offset 64. We store a full word and it will
+      // be overwritten by subsequent writes past byte 68.
+      mstore(add(dst, 64), shl(224, descriptor))
 
-      let cursor := add(dst, 100)
+      let cursor := add(dst, 68)
 
       // --- Proof (P × 32 bytes) ---
       calldatacopy(cursor, proof.offset, mul(P, 32))
@@ -240,14 +233,13 @@ contract MockEvent {
 
   function encodeVowExternal(
     uint256 chainId,
-    uint256 latestBlockNumber,
     uint256 rootBlockNumber,
     bytes32[] calldata proof,
     uint8[] calldata signerIndices,
     bytes[] calldata signatures,
     bytes calldata evt
   ) external pure returns (bytes memory encoded) {
-    encoded = encodeVow(chainId, latestBlockNumber, rootBlockNumber, proof, signerIndices, signatures, evt);
+    encoded = encodeVow(chainId, rootBlockNumber, proof, signerIndices, signatures, evt);
   }
 }
 
@@ -376,7 +368,6 @@ contract VowLibFindingsTest is Test {
   // Finding: processVow does not parse P/S/E from the documented header fields.
   function test_processVow_accepts_spec_valid_payload() external {
     uint256 chainId = 10;
-    uint256 latestBlockNumber = 500;
     uint256 rootBlockNumber = 490;
 
     bytes32[] memory topics = new bytes32[](2);
@@ -390,26 +381,18 @@ contract VowLibFindingsTest is Test {
     bytes32 leaf = v.leafHash(evt);
     bytes32 root = v.computeMerkleRootCalldata(proof, leaf);
 
-    bytes32 digest = v.hashTypedData(v.vowTypehash(chainId, latestBlockNumber, rootBlockNumber, root));
+    bytes32 digest = v.hashTypedData(v.vowTypehash(chainId, rootBlockNumber, root));
     (uint8 vv, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
     bytes[] memory signatures = new bytes[](1);
     signatures[0] = abi.encodePacked(r, s, vv);
     uint8[] memory signerIndices = new uint8[](1);
     signerIndices[0] = 1;
 
-    bytes memory vow = v.encodeVowExternal(
-      chainId,
-      latestBlockNumber,
-      rootBlockNumber,
-      proof,
-      signerIndices,
-      signatures,
-      evt
-    );
+    bytes memory vow =
+      v.encodeVowExternal(chainId, rootBlockNumber, proof, signerIndices, signatures, evt);
 
     (
       uint256 gotChainId,
-      uint256 gotLatestBlockNumber,
       uint256 gotRootBlockNumber,
       address emitter,
       bytes32[] memory gotTopics,
@@ -417,7 +400,6 @@ contract VowLibFindingsTest is Test {
     ) = v.processVow(address(directory), vow);
 
     assertEq(gotChainId, chainId);
-    assertEq(gotLatestBlockNumber, latestBlockNumber);
     assertEq(gotRootBlockNumber, rootBlockNumber);
     assertEq(emitter, address(0xBEEF));
     assertEq(gotTopics, topics);

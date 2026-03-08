@@ -2,14 +2,12 @@
 pragma solidity ^0.8.13;
 
 import { EfficientHashLib } from "solady/src/utils/EfficientHashLib.sol";
-import { MerkleProofLib } from "solady/src/utils/MerkleProofLib.sol";
 import { SignatureCheckerLib } from "solady/src/utils/SignatureCheckerLib.sol";
 
 import { IWitnessDirectory } from "./IWitnessDirectory.sol";
 
 struct Vow {
   uint256 chainId;
-  uint256 latestBlockNumber;
   uint256 rootBlockNumber;
   bytes32 root;
 }
@@ -27,10 +25,10 @@ library VowLib {
 
   error InvalidlySignedRoot();
   error InvalidMerkleProof();
-  error TooManyTopics();  // 0x643f8f9e
+  error TooManyTopics(); // 0x643f8f9e
 
   bytes32 private constant VOW_TYPE_HASH =
-    keccak256(bytes("Vow(uint256 chainId,uint256 latestBlockNumber,uint256 rootBlockNumber,bytes32 root)"));
+    keccak256(bytes("Vow(uint256 chainId,uint256 rootBlockNumber,bytes32 root)"));
 
   /// @dev `keccak256("EIP712Domain()")`.
   bytes32 internal constant _BARE_EIP712_DOMAIN_TYPEHASH =
@@ -38,11 +36,10 @@ library VowLib {
 
   function vowTypehash(
     uint256 chainId,
-    uint256 latestBlockNumber,
     uint256 rootBlockNumber,
     bytes32 root
   ) internal pure returns (bytes32 vowHash) {
-    vowHash = VOW_TYPE_HASH.hash(bytes32(chainId), bytes32(latestBlockNumber), bytes32(rootBlockNumber), root);
+    vowHash = VOW_TYPE_HASH.hash(bytes32(chainId), bytes32(rootBlockNumber), root);
   }
 
   function _hashTypedData(
@@ -63,13 +60,12 @@ library VowLib {
 
   function _verifySignedVow(
     uint256 chainId,
-    uint256 latestBlockNumber,
     uint256 rootBlockNumber,
     bytes32 root,
     address[] memory signers,
     bytes[] calldata signatures
   ) internal view {
-    bytes32 digest = _hashTypedData(vowTypehash(chainId, latestBlockNumber, rootBlockNumber, root));
+    bytes32 digest = _hashTypedData(vowTypehash(chainId, rootBlockNumber, root));
     uint256 numSigners = signers.length;
     bool valid = true;
     for (uint256 i = 0; i < numSigners; ++i) {
@@ -88,17 +84,17 @@ library VowLib {
    * │                       VOW ENCODING                         │
    * ├────────────────────────────────────────────────────────────┤
    * │                                                            │
-   * │  ════════════════════ FIXED HEADER (100 B) ══════════════  │
+   * │  ════════════════════ FIXED HEADER (68 B) ═══════════════  │
    * │                                                            │
-   * │  Byte 0                                                100 │
-   * │  ┌────────┬────────┬────────┬────────┬─────────┬────────┐  │
-   * │  │ chain  │ lastBN │ rootBN │ #proof │ #signer │ evtlen │  │
-   * │  │ (32 B) │ (32 B) │ (32 B) │ P=(1B) │  S=(1B) │ E=(2B) │  │
-   * │  └────────┴────────┴────────┴────────┴─────────┴────────┘  │
+   * │  Byte 0                                                68  │
+   * │  ┌────────────┬────────────┬────────┬─────────┬────────┐   │
+   * │  │   chain    │   rootBN   │ #proof │ #signer │ evtlen │   │
+   * │  │   (32 B)   │   (32 B)   │ P=(1B) │  S=(1B) │ E=(2B) │   │
+   * │  └────────────┴────────────┴────────┴─────────┴────────┘   │
    * │                                                            │
    * │  ═══════════════ PROOF (P × 32 bytes) ═══════════════════  │
    * │                                                            │
-   * │     Byte 100                           100 + P × 32        │
+   * │     Byte 68                             68 + P × 32        │
    * │         ┌──────────┬──────────┬─────┬──────────┐           │
    * │         │ proof[0] │ proof[1] │ ... │ proof[P] │           │
    * │         │ (32 B)   │ (32 B)   │     │ (32 B)   │           │
@@ -106,7 +102,7 @@ library VowLib {
    * │                                                            │
    * │  ════════════ SIGNER INDICES (S bytes) ══════════════════  │
    * │                                                            │
-   * │       Byte 100 + P × 32               100 + P × 32 + S     │
+   * │       Byte 68 + P × 32                68 + P × 32 + S      │
    * │            ┌────────┬────────┬─────┬────────┐              │
    * │            │ idx[0] │ idx[1] │ ... │ idx[S] │              │
    * │            │ (1 B)  │ (1 B)  │     │ (1 B)  │              │
@@ -114,7 +110,7 @@ library VowLib {
    * │                                                            │
    * │  ═══════════ SIGNATURES (variable) ══════════════════════  │
    * │                                                            │
-   * │   100 + P × 32 + S                                         │
+   * │   68 + P × 32 + S                                          │
    * │     ┌─────────┬──────────┬─────┬─────────┬──────────┐      │
    * │     │ sLen[0] │  sig[0]  │ ... │ sLen[0] │  sig[S]  │      │
    * │     │  (2B)   │(sLen[0]B)│     │  (2B)   │(sLen[S]B)│      │
@@ -129,7 +125,7 @@ library VowLib {
    * │                                                            │
    * │  ════════════════════════════════════════════════════════  │
    * │                                                            │
-   * │  Total: 132 + S × (1 + 2) + P × 32 + Σ(sLen[i]) + E bytes  │
+   * │  Total: 68 + S × (1 + 2) + P × 32 + Σ(sLen[i]) + E bytes   │
    * │                                                            │
    * └────────────────────────────────────────────────────────────┘
    */
@@ -141,7 +137,6 @@ library VowLib {
     view
     returns (
       uint256 chainId,
-      uint256 latestBlockNumber,
       uint256 rootBlockNumber,
       address emitter,
       bytes32[] calldata topics,
@@ -150,13 +145,13 @@ library VowLib {
   {
     // Load the header.
     bytes calldata evt;
-    uint256 Psize;
+    uint256 psize;
     uint256 S;
     uint256 E;
     assembly ("memory-safe") {
-      let varLengths := calldataload(add(vow.offset, 96))
-      // Header descriptor at bytes [96..99]: P(1) | S(1) | E(2), big-endian.
-      Psize := shl(5, byte(0, varLengths))
+      let varLengths := calldataload(add(vow.offset, 64))
+      // Header descriptor at bytes [64..67]: P(1) | S(1) | E(2), big-endian.
+      psize := shl(5, byte(0, varLengths))
       S := byte(1, varLengths)
       E := or(shl(8, byte(2, varLengths)), byte(3, varLengths))
 
@@ -166,24 +161,23 @@ library VowLib {
     bytes32 ourLeaf = _leafHash(evt);
     bytes32[] calldata proof;
     assembly ("memory-safe") {
-      proof.offset := add(vow.offset, 100)
-      proof.length := div(Psize, 32)
+      proof.offset := add(vow.offset, 68)
+      proof.length := div(psize, 32)
     }
     bytes32 root = computeMerkleRootCalldata(proof, ourLeaf);
 
     assembly ("memory-safe") {
       chainId := calldataload(vow.offset)
-      latestBlockNumber := calldataload(add(vow.offset, 32))
-      rootBlockNumber := calldataload(add(vow.offset, 64))
+      rootBlockNumber := calldataload(add(vow.offset, 32))
     }
-    bytes32 digest = _hashTypedData(vowTypehash(chainId, latestBlockNumber, rootBlockNumber, root));
+    bytes32 digest = _hashTypedData(vowTypehash(chainId, rootBlockNumber, root));
 
     // Step 2. Verify signatures.
     // qourum validation is done by directory.
     uint256 signerIndexies;
     assembly ("memory-safe") {
       // We need to clean
-      signerIndexies := shl(mul(sub(32, S), 8), shr(mul(sub(32, S), 8), calldataload(add(vow.offset, add(100, Psize)))))
+      signerIndexies := shl(mul(sub(32, S), 8), shr(mul(sub(32, S), 8), calldataload(add(vow.offset, add(68, psize)))))
     }
     address[] memory signers = IWitnessDirectory(directory).getQourumSet(signerIndexies);
 
@@ -191,7 +185,7 @@ library VowLib {
     bool valid = true;
     uint256 counter;
     assembly ("memory-safe") {
-      counter := add(add(100, Psize), S)
+      counter := add(add(68, psize), S)
     }
     for (uint256 i = 0; i < numSigners; ++i) {
       bytes calldata signature;
@@ -228,10 +222,10 @@ library VowLib {
    * │ └──────────────────┴───┴─────────────────────┴────────────┘ │
    * │                                                             │
    * │  ┌───────────────────────────────────────────────────────┐  │
-   * │  │ emitter  : address  — 20 bytes, left-packed           │  │
-   * │  │ N        : uint8    —  1 byte,  topic count (0–4)     │  │
-   * │  │ topics   : bytes32[]— N × 32 bytes, packed            │  │
-   * │  │ data     : bytes    — remaining bytes, no length pfx  │  │
+   * │  │ emitter  : address   — 20 bytes, left-packed          │  │
+   * │  │ N        : uint8     —  1 byte,  topic count (0–4)    │  │
+   * │  │ topics   : bytes32[] — N × 32 bytes, packed           │  │
+   * │  │ data     : bytes     — remaining bytes, no length pfx │  │
    * │  └───────────────────────────────────────────────────────┘  │
    * │                                                             │
    * │  Layout example: Transfer(from, to, amount)                 │
@@ -348,7 +342,9 @@ library VowLib {
           // Reuse `leaf` to store the hash to reduce stack operations.
           leaf := keccak256(0x00, 0x40)
           offset := add(offset, 0x20)
-          if iszero(lt(offset, end)) { break }
+          if iszero(lt(offset, end)) {
+            break
+          }
         }
       }
       root := leaf

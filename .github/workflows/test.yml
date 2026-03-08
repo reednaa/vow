@@ -38,3 +38,55 @@ jobs:
         run: |
           forge test -vvv
         id: test
+
+  witness:
+    name: Witness project
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vow
+          POSTGRES_PASSWORD: vow
+          POSTGRES_DB: vow_witness
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U vow -d vow_witness"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.5
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install dependencies
+        working-directory: witness
+        run: |
+          bun install --frozen-lockfile
+
+      - name: Run DB migrations
+        working-directory: witness
+        env:
+          DATABASE_URL: postgresql://vow:vow@localhost:5433/vow_witness
+        run: |
+          bun run db:migrate
+
+      - name: Type check
+        working-directory: witness
+        run: |
+          bunx tsc --noEmit
+
+      - name: Run tests
+        working-directory: witness
+        run: |
+          bun test

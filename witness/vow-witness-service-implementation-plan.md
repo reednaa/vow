@@ -87,14 +87,7 @@ The schema is defined using Drizzle ORM's TypeScript schema definition. Drizzle 
 ### Drizzle Schema (`src/db/schema.ts`)
 
 ```typescript
-import { pgTable, integer, bigint, text, customType, timestamp, serial, primaryKey, index } from "drizzle-orm/pg-core";
-
-// Custom type for bytea columns (stored as Buffer in application code)
-const bytea = customType<{ data: Buffer; dpiData: string }>({
-  dataType() { return "bytea"; },
-  toDriver(value: Buffer) { return value; },
-  fromDriver(value: string) { return Buffer.from(value, "hex"); },
-});
+import { pgTable, integer, bigint, text, timestamp, serial, primaryKey, index } from "drizzle-orm/pg-core";
 
 export const chains = pgTable("chains", {
   chainId: integer("chain_id").primaryKey(),           // Numeric chain ID (e.g., 1)
@@ -112,10 +105,10 @@ export const rpcs = pgTable("rpcs", {
 export const indexedBlocks = pgTable("indexed_blocks", {
   chainId: integer("chain_id").notNull().references(() => chains.chainId),
   blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
-  blockHash: bytea("block_hash").notNull(),            // Block hash all RPCs agreed on
-  merkleRoot: bytea("merkle_root").notNull(),          // Computed Merkle root over all events
+  blockHash: text("block_hash").notNull(),             // 0x-prefixed hex, 32 bytes
+  merkleRoot: text("merkle_root").notNull(),           // 0x-prefixed hex, 32 bytes
   latestBlockAtIndex: bigint("latest_block_at_index", { mode: "bigint" }).notNull(),
-  signature: bytea("signature").notNull(),             // Witness signature over the Vow struct
+  signature: text("signature").notNull(),              // 0x-prefixed packed signature hex
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
   primaryKey({ columns: [table.chainId, table.blockNumber] }),
@@ -125,8 +118,8 @@ export const indexedEvents = pgTable("indexed_events", {
   chainId: integer("chain_id").notNull(),
   blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
   logIndex: integer("log_index").notNull(),            // Position in the block's log array
-  leafHash: bytea("leaf_hash").notNull(),              // keccak256(keccak256(canonical_event_bytes))
-  canonicalBytes: bytea("canonical_bytes").notNull(),  // Raw encoding: emitter || topic_count || topics || data
+  leafHash: text("leaf_hash").notNull(),               // 0x-prefixed hex, keccak256(keccak256(...))
+  canonicalBytes: text("canonical_bytes").notNull(),   // 0x-prefixed hex, raw canonical encoding
   treeIndex: integer("tree_index").notNull(),          // Position in sorted Merkle tree (by leaf_hash asc)
 }, (table) => [
   primaryKey({ columns: [table.chainId, table.blockNumber, table.logIndex] }),
@@ -340,7 +333,7 @@ On `SIGTERM` / `SIGINT`: stop accepting new HTTP requests, let in-flight request
 ## Project Structure
 
 ```
-vow-witness/
+witness/
 ├── src/
 │   ├── index.ts                 # Entrypoint: startup sequence
 │   ├── api/
