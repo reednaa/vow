@@ -99,10 +99,15 @@ export function createWitnessController(db: any, addJob: AddJobFn) {
 
       // Block not indexed — check for existing Graphile job
       const jobKey = `index:${chainId}:${blockNumber}`;
-      const jobRows = await db.execute(
-        sql`SELECT id, locked_at, attempts, max_attempts FROM graphile_worker.jobs WHERE key = ${jobKey} LIMIT 1`
-      );
-      const job = jobRows.rows?.[0] ?? jobRows[0] ?? null;
+      let job: any = null;
+      try {
+        const jobRows = await db.execute(
+          sql`SELECT id, locked_at, attempts, max_attempts FROM graphile_worker.jobs WHERE key = ${jobKey} LIMIT 1`
+        );
+        job = jobRows.rows?.[0] ?? jobRows[0] ?? null;
+      } catch {
+        // graphile_worker schema not yet installed; treat as no job
+      }
 
       if (job) {
         if (job.locked_at) {
