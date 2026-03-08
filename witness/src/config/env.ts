@@ -49,6 +49,7 @@ export interface ApiConfig {
 export interface WorkerConfig {
   witnessPrivateKey: `0x${string}`;
   databaseUrl: string;
+  workerHealthPort: number;
 }
 
 export interface MigrateConfig {
@@ -80,6 +81,7 @@ export function loadWorkerConfig(): WorkerConfig {
   return {
     witnessPrivateKey: parsePrivateKey(requireEnv("WITNESS_PRIVATE_KEY")),
     databaseUrl: requireEnv("DATABASE_URL"),
+    workerHealthPort: parsePort("WORKER_HEALTH_PORT", 3002),
   };
 }
 

@@ -44,6 +44,7 @@ Request flow:
 - `WITNESS_SIGNER_ADDRESS` (required for `start:api`): 20-byte hex address for the configured signer
 - `API_PORT` (optional): API server port, default `3000`
 - `HEALTH_PORT` (optional): health server port, default `3001`
+- `WORKER_HEALTH_PORT` (optional): worker health port for `start:worker`, default `3002`
 
 ## Run Locally
 
@@ -107,6 +108,12 @@ Health endpoint:
 
 ```bash
 curl http://localhost:3001/health
+```
+
+Worker health endpoint (split mode):
+
+```bash
+curl http://localhost:3002/health
 ```
 
 Witness endpoint example:

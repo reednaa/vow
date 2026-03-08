@@ -3,10 +3,13 @@ import { loadWorkerConfig } from "../config/env.ts";
 import { createEnvSigner } from "../core/signing.ts";
 import { createDb, closeDb } from "../db/client.ts";
 import { setupWorker } from "../worker/setup.ts";
+import { createWorkerHealthServer } from "../api/health.server.ts";
 
 async function main() {
   initTelemetry();
   const config = loadWorkerConfig();
+  let ready = false;
+  const healthServer = createWorkerHealthServer(config.workerHealthPort, () => ready);
   const signer = createEnvSigner(config.witnessPrivateKey);
   const db = createDb(config.databaseUrl);
   const worker = await setupWorker({
@@ -14,6 +17,7 @@ async function main() {
     signer,
     db,
   });
+  ready = true;
 
   console.log("Worker signer address:", signer.address());
 
@@ -21,7 +25,12 @@ async function main() {
   async function shutdown() {
     if (shuttingDown) return;
     shuttingDown = true;
+    ready = false;
     console.log("Worker shutting down...");
+
+    try {
+      healthServer.stop();
+    } catch {}
 
     try {
       await worker.stop();
