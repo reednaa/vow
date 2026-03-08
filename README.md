@@ -1,18 +1,20 @@
-# Vow
 
-Vow is an event attestation system that lets onchain applications trust specific EVM logs without trusting a single RPC response.
+<h1 align="center">Vow</h1>
+
+Vow is an event attestation framework for providing on-chain applications with an efficient multi-signed event inclusion statement. The framework is designed to be maximally flexible with minimal gas costs. A single event can be proved for as little as 33'000 gas (1 signer, 1'024-leaf tree). 
 
 The project is split into two parts:
 
 - [`/witness`](/witness): offchain witness service that indexes blocks, canonicalizes events, builds Merkle roots, signs roots, and serves proofs for individual events.
-- [`/solidity`](/solidity): onchain verification library and witness directory contracts that validate witness signatures plus Merkle proofs and return decoded event data.
+- [`/solidity`](/solidity): onchain verification library and witness directory contracts that validate witness signatures plus Merkle proofs and returns decoded event data.
 
 ## Project Goal
 
-Make event consumption safer and more portable by separating:
+Create the cheapest, most flexible, and most efficient cross-chain messaging-adjacent framework possible. Additionally, safety should be built in:
 
-- Event observation and attestation (offchain witness operators)
-- Event verification and policy enforcement (onchain consumer contracts)
+- Finality decisions is determined by witnesses off-chain.
+- Multi-vendor solutions throughout the entire stack: Natively support multiple witness, multiple data sources. 
+- Strong verification and truth policy: Each witness can independently attest to a block event root and each witness can use multiple truth sources.
 
 ## Strategy
 
