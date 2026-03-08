@@ -16,12 +16,11 @@ import { witnessParams, witnessResponse } from "./model.ts";
 export type AddJobFn = (identifier: string, payload?: any, spec?: any) => Promise<any>;
 
 const CAIP2_RE = /^eip155:(\d+)$/;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export function createWitnessController(
   db: any,
   addJob: AddJobFn,
-  witnessSigner: string = ZERO_ADDRESS
+  witnessSigner: string = "0x0000000000000000000000000000000000000000"
 ) {
   return new Elysia().get(
     "/witness/:caip2ChainId/:blockNumber/:logIndex",
@@ -92,7 +91,7 @@ export function createWitnessController(
         // Decode canonical bytes
         const canonicalBytes = Buffer.from(event.canonicalBytes, "hex");
         const { emitter, topics, data } = decodeEvent(new Uint8Array(canonicalBytes));
-        let signatureSigner = ZERO_ADDRESS;
+        let signatureSigner: string;
         try {
           const signature = block.signature as Hex;
           const recoverableSignature = signature.length === 130
@@ -107,9 +106,10 @@ export function createWitnessController(
             signature: recoverableSignature,
           });
         } catch (error) {
-          console.warn(
-            `[witness] signature recovery failed chain=${chainId} block=${blockNumber} logIndex=${logIndex}: ${String(error)}`
+          console.error(
+            `[witness] signature recovery failed chain=${chainId} block=${blockNumber}: ${String(error)}`
           );
+          return { status: "error" as const, error: "Signature recovery failed" };
         }
 
         console.log(

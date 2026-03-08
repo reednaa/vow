@@ -31,6 +31,7 @@ const witnessStatusOnly = t.Union([
   t.Object({ status: t.Literal("pending") }),
   t.Object({ status: t.Literal("indexing") }),
   t.Object({ status: t.Literal("failed"), error: t.String() }),
+  t.Object({ status: t.Literal("error"), error: t.String() }),
 ]);
 
 const witnessError = t.Object({ error: t.String() });

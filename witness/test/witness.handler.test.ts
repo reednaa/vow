@@ -8,16 +8,22 @@ import { createWitnessController } from "../src/api/witness.handler";
 import { createHealthServer } from "../src/api/health.server";
 import { encodeEvent, computeLeafHash } from "../src/core/encoding";
 import { buildMerkleTree, generateProof, verifyProof } from "../src/core/merkle";
+import { createEnvSigner } from "../src/core/signing";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const TEST_CHAIN_ID = 99992;
 const API_PORT = 13001;
 const HEALTH_PORT = 13002;
 
+// Anvil key #0
+const ANVIL_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+
 const MOCK_BLOCK_NUMBER = 7001n;
+const MOCK_BLOCK_NUMBER_BAD_SIG = 7002n;
 const MOCK_BLOCK_HASH = "0x" + "bb".repeat(32) as Hex;
-const MOCK_SIGNATURE = "0x" + "cc".repeat(65) as Hex;
-const MOCK_WITNESS_SIGNER = "0x00000000000000000000000000000000000000aa";
+const BAD_SIGNATURE = "0x" + "cc".repeat(65) as Hex;
+let MOCK_SIGNATURE: Hex;
+let MOCK_WITNESS_SIGNER: string;
 
 const MOCK_LOGS: Array<{ address: Address; topics: Hex[]; data: Hex; logIndex: number }> = [
   {
@@ -70,7 +76,7 @@ beforeAll(async () => {
     { chainId: TEST_CHAIN_ID, url: "http://rpc2.test" },
   ]);
 
-  // Pre-index the block
+  // Pre-index the block with a real signature
   const eventsData = MOCK_LOGS.map((log) => {
     const canonicalBytes = encodeEvent(log.address, log.topics, log.data);
     const leafHash = computeLeafHash(canonicalBytes);
@@ -80,6 +86,15 @@ beforeAll(async () => {
   const leafHashes = eventsData.map((e) => e.leafHash as Hex);
   const { root: merkleRoot, tree } = buildMerkleTree(leafHashes);
   const sortedLeaves = tree[0]!;
+
+  // Compute a real recoverable signature
+  const signer = createEnvSigner(ANVIL_KEY);
+  MOCK_WITNESS_SIGNER = signer.address();
+  MOCK_SIGNATURE = await signer.signVow({
+    chainId: BigInt(TEST_CHAIN_ID),
+    rootBlockNumber: MOCK_BLOCK_NUMBER,
+    root: merkleRoot,
+  });
 
   await db.insert(indexedBlocks).values({
     chainId: TEST_CHAIN_ID,
@@ -103,6 +118,32 @@ beforeAll(async () => {
       treeIndex,
     });
   }
+
+  // Seed a second block with a garbage (unrecoverable) signature for the error-path test
+  const badEventCanonical = encodeEvent(
+    "0x0000000000000000000000000000000000000007" as Address,
+    ["0x" + "77".repeat(32) as Hex],
+    "0xdead" as Hex,
+  );
+  const badLeafHash = computeLeafHash(badEventCanonical);
+  const { root: badMerkleRoot } = buildMerkleTree([badLeafHash]);
+
+  await db.insert(indexedBlocks).values({
+    chainId: TEST_CHAIN_ID,
+    blockNumber: MOCK_BLOCK_NUMBER_BAD_SIG,
+    blockHash: "0x" + "dd".repeat(32) as Hex,
+    merkleRoot: badMerkleRoot,
+    latestBlockAtIndex: MOCK_BLOCK_NUMBER_BAD_SIG + 10n,
+    signature: BAD_SIGNATURE,
+  });
+  await db.insert(indexedEvents).values({
+    chainId: TEST_CHAIN_ID,
+    blockNumber: MOCK_BLOCK_NUMBER_BAD_SIG,
+    logIndex: 0,
+    leafHash: badLeafHash,
+    canonicalBytes: Buffer.from(badEventCanonical).toString("hex"),
+    treeIndex: 0,
+  });
 
   // Start API server
   const mockAddJob = async () => ({} as any);
@@ -134,7 +175,7 @@ describe("GET /witness", () => {
     const body = await res.json() as any;
     expect(body.status).toBe("ready");
     expect(body.witness).toBeTruthy();
-    expect(body.witness.signer).toMatch(/^0x[a-fA-F0-9]{40}$/);
+    expect(body.witness.signer).toBe(MOCK_WITNESS_SIGNER);
     expect(body.witness.chainId).toBe(TEST_CHAIN_ID);
     expect(body.witness.rootBlockNumber).toBe(Number(MOCK_BLOCK_NUMBER));
     expect(body.witness.proof).toBeInstanceOf(Array);
@@ -154,6 +195,16 @@ describe("GET /witness", () => {
     expect(
       verifyProof(body.witness.root as Hex, targetLeaf.leafHash as Hex, body.witness.proof)
     ).toBe(true);
+  });
+
+  it("returns error status when stored signature is unrecoverable", async () => {
+    const res = await fetch(
+      `${BASE_URL}/witness/eip155:${TEST_CHAIN_ID}/${Number(MOCK_BLOCK_NUMBER_BAD_SIG)}/0`
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(body.status).toBe("error");
+    expect(body.error).toBe("Signature recovery failed");
   });
 
   it("returns 404 for indexed block but non-existent logIndex", async () => {

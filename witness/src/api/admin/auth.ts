@@ -40,6 +40,7 @@ export function createAuthHandler(passwordHash: string, jwtSecret: string) {
           value: await jwt.sign({ sub: "admin" }),
           httpOnly: true,
           sameSite: "strict",
+          secure: process.env.NODE_ENV !== "development",
           path: "/",
           maxAge: 86400,
         });
