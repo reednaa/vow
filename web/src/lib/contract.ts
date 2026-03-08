@@ -1,6 +1,16 @@
 import { type Address, type Hex, createPublicClient, http } from "viem";
 import type { VowResult } from "./types.js";
 
+const WITNESS_DIRECTORY_ABI = [
+  {
+    name: "getSigner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "index", type: "uint256" }],
+    outputs: [{ name: "signer", type: "address" }],
+  },
+] as const;
+
 const MOCK_VOW_LIB_ABI = [
   { name: "InvalidlySignedRoot", type: "error", inputs: [] },
   { name: "TooManyTopics", type: "error", inputs: [] },
@@ -31,6 +41,22 @@ const MOCK_VOW_LIB_ABI = [
     ],
   },
 ] as const;
+
+export async function getDirectorySigner(
+  rpcUrl: string,
+  directoryAddress: Address,
+  signerIndex: number
+): Promise<Address> {
+  const client = createPublicClient({ transport: http(rpcUrl) });
+  const signer = await client.readContract({
+    address: directoryAddress,
+    abi: WITNESS_DIRECTORY_ABI,
+    functionName: "getSigner",
+    args: [BigInt(signerIndex)],
+  });
+
+  return signer as Address;
+}
 
 export async function callProcessVow(
   rpcUrl: string,

@@ -1,17 +1,23 @@
 import { Elysia } from "elysia";
 import { eq, and, sql } from "drizzle-orm";
-import { type Hex } from "viem";
+import { type Hex, recoverAddress } from "viem";
 import { chains, indexedBlocks, indexedEvents } from "../db/schema.ts";
 import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeEvent } from "../core/encoding.ts";
+import { computeVowDigest } from "../core/signing.ts";
 import { INDEX_BLOCK_TASK } from "../worker/index-block.task.ts";
 import { witnessParams, witnessResponse } from "./model.ts";
 
 export type AddJobFn = (identifier: string, payload?: any, spec?: any) => Promise<any>;
 
 const CAIP2_RE = /^eip155:(\d+)$/;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-export function createWitnessController(db: any, addJob: AddJobFn) {
+export function createWitnessController(
+  db: any,
+  addJob: AddJobFn,
+  witnessSigner: string = ZERO_ADDRESS
+) {
   return new Elysia().get(
     "/witness/:caip2ChainId/:blockNumber/:logIndex",
     async ({ params, set }) => {
@@ -81,10 +87,30 @@ export function createWitnessController(db: any, addJob: AddJobFn) {
         // Decode canonical bytes
         const canonicalBytes = Buffer.from(event.canonicalBytes, "hex");
         const { emitter, topics, data } = decodeEvent(new Uint8Array(canonicalBytes));
+        let signatureSigner = ZERO_ADDRESS;
+        try {
+          signatureSigner = await recoverAddress({
+            hash: computeVowDigest({
+              chainId: BigInt(chainId),
+              rootBlockNumber: blockNumberBigInt,
+              root: block.merkleRoot as Hex,
+            }),
+            signature: block.signature as Hex,
+          });
+        } catch (error) {
+          console.warn(
+            `[witness] signature recovery failed chain=${chainId} block=${blockNumber} logIndex=${logIndex}: ${String(error)}`
+          );
+        }
+
+        console.log(
+          `[witness] ready chain=${chainId} block=${blockNumber} logIndex=${logIndex} signerConfigured=${witnessSigner} signerRecovered=${signatureSigner}`
+        );
 
         return {
           status: "ready" as const,
           witness: {
+            signer: signatureSigner,
             chainId,
             latestBlockNumber: Number(block.latestBlockAtIndex),
             rootBlockNumber: blockNumber,
@@ -131,7 +157,12 @@ export function createWitnessController(db: any, addJob: AddJobFn) {
 type WitnessController = ReturnType<typeof createWitnessController>;
 type AppWithUse = { use: (plugin: WitnessController) => unknown };
 
-export function mountWitnessHandler<TApp extends AppWithUse>(app: TApp, db: any, addJob: AddJobFn) {
-  app.use(createWitnessController(db, addJob));
+export function mountWitnessHandler<TApp extends AppWithUse>(
+  app: TApp,
+  db: any,
+  addJob: AddJobFn,
+  witnessSigner: string
+) {
+  app.use(createWitnessController(db, addJob, witnessSigner));
   return app;
 }

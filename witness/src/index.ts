@@ -26,7 +26,7 @@ async function main() {
   });
 
   const healthServer = createHealthServer(config.healthPort);
-  const apiServer = createApiServer(config.apiPort, db, worker.addJob);
+  const apiServer = createApiServer(config.apiPort, db, worker.addJob, signer.address());
 
   console.log("Vow Witness Service started on port", config.apiPort);
 

@@ -12,7 +12,12 @@ function applyCorsHeaders(request: Request, set: { headers: Record<string, strin
   set.headers.vary = "origin";
 }
 
-export function createApiServer(port: number, db: any, addJob: AddJobFn) {
+export function createApiServer(
+  port: number,
+  db: any,
+  addJob: AddJobFn,
+  witnessSigner: string
+) {
   const app = new Elysia()
     .onRequest(({ request, set }) => {
       applyCorsHeaders(request, set as { headers: Record<string, string> });
@@ -30,7 +35,7 @@ export function createApiServer(port: number, db: any, addJob: AddJobFn) {
       return { error: String(error) };
     });
 
-  mountWitnessHandler(app, db, addJob);
+  mountWitnessHandler(app, db, addJob, witnessSigner);
 
   app.listen(port);
   return app;

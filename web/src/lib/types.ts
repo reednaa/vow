@@ -6,6 +6,7 @@ export interface WitnessSource {
 }
 
 export interface WitnessResult {
+  signer: Address;
   chainId: number;
   rootBlockNumber: number;
   proof: Hex[];
@@ -25,6 +26,12 @@ export interface ProofResult {
   status: WitnessStatus;
   witness?: WitnessResult;
   error?: string;
+  signerMatch?: {
+    selectedIndex: number;
+    witnessSigner: Address;
+    onChainSigner: Address;
+    matches: boolean;
+  };
 }
 
 export type StepState = "idle" | "running" | "done" | "error";

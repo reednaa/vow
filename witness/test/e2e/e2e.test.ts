@@ -179,7 +179,7 @@ beforeAll(async () => {
 
   worker = await setupWorker({ databaseUrl: DATABASE_URL, signer, db });
 
-  mountWitnessHandler(app, db, worker.addJob);
+  mountWitnessHandler(app, db, worker.addJob, signer.address());
   app.listen(API_PORT);
 
   // Allow server to settle

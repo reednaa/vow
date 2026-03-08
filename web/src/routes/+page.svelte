@@ -2,7 +2,7 @@
   import "../app.css";
   import { encodeVow } from "$lib/encoding.js";
   import { pollWitness } from "$lib/witnessClient.js";
-  import { callProcessVow } from "$lib/contract.js";
+  import { callProcessVow, getDirectorySigner } from "$lib/contract.js";
   import type { ProofResult, SignedWitness, Step, VowResult, WitnessSource } from "$lib/types.js";
   import type { Address, Hex } from "viem";
 
@@ -78,6 +78,7 @@
 
     steps = [
       { label: "Fetching proofs", state: "running" },
+      { label: "Validating signers", state: "idle" },
       { label: "Encoding Vow", state: "idle" },
       { label: "Calling on-chain", state: "idle" },
       { label: "Done", state: "idle" },
@@ -120,20 +121,83 @@
       }
 
       setStep(0, "done");
+      const readyWitnesses = settled.map(
+        (r) => (r as PromiseFulfilledResult<(typeof proofResults)[0]["witness"]>).value!
+      );
 
-      // ── Step 2: encode vow ────────────────────────────────────────────────
+      // ── Step 2: validate signer/index matches on-chain ────────────────────
       setStep(1, "running");
 
-      const signedWitnesses: SignedWitness[] = settled.map((r, i) => ({
-        witness: (r as PromiseFulfilledResult<(typeof proofResults)[0]["witness"]>).value!,
+      const signerChecks = await Promise.allSettled(
+        witnessSources.map(async (src, i) => {
+          const witness = readyWitnesses[i]!;
+          const onChainSigner = await getDirectorySigner(
+            rpcUrl,
+            directoryAddress as Address,
+            src.signerIndex
+          );
+          const witnessSigner = witness.signer;
+          const matches = onChainSigner.toLowerCase() === witnessSigner.toLowerCase();
+
+          proofResults = proofResults.map((r, idx) =>
+            idx === i
+              ? {
+                  ...r,
+                  status: matches ? "ready" : "failed",
+                  error: matches ? undefined : `Signer mismatch at idx ${src.signerIndex}`,
+                  signerMatch: {
+                    selectedIndex: src.signerIndex,
+                    witnessSigner,
+                    onChainSigner,
+                    matches,
+                  },
+                }
+              : r
+          );
+
+          if (!matches) {
+            throw new Error(
+              `Witness ${i + 1} (${src.url}) signer ${witnessSigner} does not match on-chain signer ${onChainSigner} at index ${src.signerIndex}`
+            );
+          }
+        })
+      );
+
+      const signerFailures = signerChecks
+        .map((r, i) => (r.status === "rejected" ? { i, reason: r.reason } : null))
+        .filter(Boolean) as { i: number; reason: unknown }[];
+
+      for (const { i, reason } of signerFailures) {
+        proofResults = proofResults.map((r, idx) =>
+          idx === i
+            ? {
+                ...r,
+                status: "failed",
+                error: reason instanceof Error ? reason.message : String(reason),
+              }
+            : r
+        );
+      }
+
+      if (signerFailures.length > 0) {
+        throw new Error(`${signerFailures.length} signer validation failure(s) — see details above`);
+      }
+
+      setStep(1, "done");
+
+      // ── Step 3: encode vow ────────────────────────────────────────────────
+      setStep(2, "running");
+
+      const signedWitnesses: SignedWitness[] = readyWitnesses.map((witness, i) => ({
+        witness,
         signerIndex: witnessSources[i]!.signerIndex,
       }));
 
       vowHex = encodeVow(signedWitnesses);
-      setStep(1, "done", `${(vowHex.length - 2) / 2} bytes`);
+      setStep(2, "done", `${(vowHex.length - 2) / 2} bytes`);
 
-      // ── Step 3: on-chain call ─────────────────────────────────────────────
-      setStep(2, "running");
+      // ── Step 4: on-chain call ─────────────────────────────────────────────
+      setStep(3, "running");
 
       vowResult = await callProcessVow(
         rpcUrl,
@@ -142,8 +206,8 @@
         vowHex
       );
 
-      setStep(2, "done");
       setStep(3, "done");
+      setStep(4, "done");
     } catch (err) {
       globalError = err instanceof Error ? err.message : String(err);
       // Mark any still-running step as error
@@ -381,6 +445,18 @@
               {r.status === "ready" ? "✓" : r.status === "failed" ? "✗" : "◌"}
             </span>
             <span class="text-gray-400 break-all">{r.source.url}</span>
+            {#if r.signerMatch}
+              <span
+                class={`break-all ${r.signerMatch.matches ? "text-green-500" : "text-red-400"}`}
+              >
+                — idx {r.signerMatch.selectedIndex} witness {r.signerMatch.witnessSigner} on-chain
+                {r.signerMatch.onChainSigner}
+              </span>
+            {:else if r.witness}
+              <span class="text-gray-500 break-all">
+                — idx {r.source.signerIndex} witness {r.witness.signer}
+              </span>
+            {/if}
             {#if r.status === "failed" && r.error}
               <span class="text-red-400">— {r.error}</span>
             {/if}
@@ -421,8 +497,11 @@
 
   <!-- ── Result ─────────────────────────────────────────────────────────────── -->
   {#if vowResult}
-    <div class="mt-6" data-testid="result">
-      <h2 class="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">
+    <div
+      class="mt-6 rounded-lg border border-gray-700 bg-gray-950/90 px-4 py-4"
+      data-testid="result"
+    >
+      <h2 class="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
         Result
       </h2>
       <table class="w-full border-collapse text-xs">

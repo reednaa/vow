@@ -17,6 +17,7 @@ const HEALTH_PORT = 13002;
 const MOCK_BLOCK_NUMBER = 7001n;
 const MOCK_BLOCK_HASH = "0x" + "bb".repeat(32) as Hex;
 const MOCK_SIGNATURE = "0x" + "cc".repeat(65) as Hex;
+const MOCK_WITNESS_SIGNER = "0x00000000000000000000000000000000000000aa";
 
 const MOCK_LOGS: Array<{ address: Address; topics: Hex[]; data: Hex; logIndex: number }> = [
   {
@@ -105,7 +106,7 @@ beforeAll(async () => {
 
   // Start API server
   const mockAddJob = async () => ({} as any);
-  app.use(createWitnessController(db, mockAddJob));
+  app.use(createWitnessController(db, mockAddJob, MOCK_WITNESS_SIGNER));
   app.listen(API_PORT);
 
   healthServer = createHealthServer(HEALTH_PORT);
@@ -133,6 +134,7 @@ describe("GET /witness", () => {
     const body = await res.json() as any;
     expect(body.status).toBe("ready");
     expect(body.witness).toBeTruthy();
+    expect(body.witness.signer).toMatch(/^0x[a-fA-F0-9]{40}$/);
     expect(body.witness.chainId).toBe(TEST_CHAIN_ID);
     expect(body.witness.rootBlockNumber).toBe(Number(MOCK_BLOCK_NUMBER));
     expect(body.witness.proof).toBeInstanceOf(Array);

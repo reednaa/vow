@@ -15,6 +15,7 @@ const witnessEvent = t.Object({
 const witnessReady = t.Object({
   status: t.Literal("ready"),
   witness: t.Object({
+    signer: t.String(),
     chainId: t.Number(),
     latestBlockNumber: t.Number(),
     rootBlockNumber: t.Number(),

@@ -111,7 +111,7 @@ beforeAll(async () => {
     fetchBlock: mockFetchBlock,
   });
 
-  app.use(createWitnessController(db, worker.addJob));
+  app.use(createWitnessController(db, worker.addJob, signer.address()));
   app.listen(API_PORT);
 
   await new Promise((r) => setTimeout(r, 100));

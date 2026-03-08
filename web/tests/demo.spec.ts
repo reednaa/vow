@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 import type { WitnessResult } from "../src/lib/types.js";
 
+const MOCK_SIGNER = "0x2222222222222222222222222222222222222222";
+const GET_SIGNER_SELECTOR = "0x3ffefe4e";
+
 const MOCK_WITNESS: WitnessResult = {
+  signer: MOCK_SIGNER,
   chainId: 1,
   rootBlockNumber: 100,
   proof: [],
@@ -16,13 +20,41 @@ const MOCK_WITNESS: WitnessResult = {
   },
 };
 
-const MOCK_VOW_RESULT = {
-  chainId: "1",
-  rootBlockNumber: "100",
-  emitter: "0x1111111111111111111111111111111111111111",
-  topics: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-  data: "0xdeadbeef",
-};
+const MOCK_GET_SIGNER_RESULT =
+  `0x${"0".repeat(24)}${MOCK_SIGNER.slice(2).toLowerCase()}`;
+
+const MOCK_PROCESS_VOW_RESULT =
+  "0x0000000000000000000000000000000000000000000000000000000000000001" +
+  "0000000000000000000000000000000000000000000000000000000000000064" +
+  "0000000000000000000000001111111111111111111111111111111111111111" +
+  "00000000000000000000000000000000000000000000000000000000000000a0" +
+  "00000000000000000000000000000000000000000000000000000000000000e0" +
+  "0000000000000000000000000000000000000000000000000000000000000001" +
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" +
+  "0000000000000000000000000000000000000000000000000000000000000004" +
+  "deadbeef00000000000000000000000000000000000000000000000000000000";
+
+function buildEthCallResult(data?: string): string {
+  if (data?.startsWith(GET_SIGNER_SELECTOR)) {
+    return MOCK_GET_SIGNER_RESULT;
+  }
+  return MOCK_PROCESS_VOW_RESULT;
+}
+
+function buildRpcResponse(body: any) {
+  if (Array.isArray(body)) {
+    return body.map((entry: any) => ({
+      id: entry.id ?? 1,
+      jsonrpc: "2.0",
+      result: buildEthCallResult(entry?.params?.[0]?.data),
+    }));
+  }
+  return {
+    id: body.id ?? 1,
+    jsonrpc: "2.0",
+    result: buildEthCallResult(body?.params?.[0]?.data),
+  };
+}
 
 test("page loads with title and form", async ({ page }) => {
   await page.goto("/");
@@ -84,22 +116,7 @@ test("mock witness flow completes with proof step", async ({ page }) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({
-          id: body.id,
-          jsonrpc: "2.0",
-          // ABI-encode: (uint256 1, uint256 100, address 0x111...111, bytes32[] [...], bytes 0xdeadbeef)
-          // We'll return a minimal mock that viem can decode
-          result:
-            "0x0000000000000000000000000000000000000000000000000000000000000001" + // chainId = 1
-            "0000000000000000000000000000000000000000000000000000000000000064" + // rootBlockNumber = 100
-            "0000000000000000000000001111111111111111111111111111111111111111" + // emitter
-            "00000000000000000000000000000000000000000000000000000000000000a0" + // topics offset
-            "00000000000000000000000000000000000000000000000000000000000000e0" + // data offset
-            "0000000000000000000000000000000000000000000000000000000000000001" + // topics.length = 1
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" + // topics[0]
-            "0000000000000000000000000000000000000000000000000000000000000004" + // data.length = 4
-            "deadbeef00000000000000000000000000000000000000000000000000000000", // data
-        }),
+        body: JSON.stringify(buildRpcResponse(body)),
       });
     } else {
       await route.continue();
@@ -118,6 +135,38 @@ test("mock witness flow completes with proof step", async ({ page }) => {
   await expect(page.getByTestId("steps")).toBeVisible();
 });
 
+test("run fails when witness signer does not match selected on-chain signer index", async ({ page }) => {
+  await page.route("**/witness/eip155:1/100/0", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "ready",
+        witness: { ...MOCK_WITNESS, signer: "0x3333333333333333333333333333333333333333" },
+      }),
+    });
+  });
+
+  await page.route("https://mock-rpc.example.com", async (route) => {
+    const body = JSON.parse((route.request().postData() ?? "{}") as string);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(buildRpcResponse(body)),
+    });
+  });
+
+  await page.goto("/");
+
+  await page.getByLabel("Block Number").fill("100");
+  await page.fill('input[placeholder="https://rpc.example.com"]', "https://mock-rpc.example.com");
+  await page.fill('[placeholder="https://witness.example.com"]', "https://witness.example.com");
+  await page.getByRole("button", { name: "Run" }).click();
+
+  await expect(page.getByTestId("run-error")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId("run-error")).toContainText("signer validation failure");
+});
+
 test("result table renders all fields when mock returns decoded data", async ({ page }) => {
   await page.route("**/witness/eip155:1/100/0", async (route) => {
     await route.fulfill({
@@ -132,20 +181,7 @@ test("result table renders all fields when mock returns decoded data", async ({ 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({
-        id: body.id ?? 1,
-        jsonrpc: "2.0",
-        result:
-          "0x0000000000000000000000000000000000000000000000000000000000000001" +
-          "0000000000000000000000000000000000000000000000000000000000000064" +
-          "0000000000000000000000001111111111111111111111111111111111111111" +
-          "00000000000000000000000000000000000000000000000000000000000000a0" +
-          "00000000000000000000000000000000000000000000000000000000000000e0" +
-          "0000000000000000000000000000000000000000000000000000000000000001" +
-          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" +
-          "0000000000000000000000000000000000000000000000000000000000000004" +
-          "deadbeef00000000000000000000000000000000000000000000000000000000",
-      }),
+      body: JSON.stringify(buildRpcResponse(body)),
     });
   });
 
