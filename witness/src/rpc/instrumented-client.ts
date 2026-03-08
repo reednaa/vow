@@ -1,11 +1,12 @@
-import { trace, metrics, SpanStatusCode } from "@opentelemetry/api";
+import { context, trace, metrics, SpanStatusCode, type Context } from "@opentelemetry/api";
 import type { RpcClient } from "./client.ts";
 
 type RpcMethod = "getBlock" | "getLogs" | "getBlockNumber";
 
 export function instrumentRpcClient(
   client: RpcClient,
-  attrs: { url: string; chainId: number }
+  attrs: { url: string; chainId: number },
+  parentContext?: Context
 ): RpcClient {
   const tracer = trace.getTracer("vow-witness");
   const meter = metrics.getMeter("vow-witness");
@@ -25,22 +26,25 @@ export function instrumentRpcClient(
     return (async (...args: any[]) => {
       const spanAttrs = { "rpc.method": name, ...commonAttrs };
       const start = Date.now();
+      const span = tracer.startSpan(
+        `rpc.${name}`,
+        { attributes: spanAttrs },
+        parentContext ?? context.active()
+      );
 
-      return tracer.startActiveSpan(`rpc.${name}`, { attributes: spanAttrs }, async (span) => {
-        try {
-          const result = await method(...args);
-          durationHistogram.record(Date.now() - start, spanAttrs);
-          return result;
-        } catch (err: any) {
-          durationHistogram.record(Date.now() - start, spanAttrs);
-          errorsCounter.add(1, { ...spanAttrs, "error.type": err?.constructor?.name ?? "Error" });
-          span.recordException(err);
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          throw err;
-        } finally {
-          span.end();
-        }
-      });
+      try {
+        const result = await method(...args);
+        durationHistogram.record(Date.now() - start, spanAttrs);
+        return result;
+      } catch (err: any) {
+        durationHistogram.record(Date.now() - start, spanAttrs);
+        errorsCounter.add(1, { ...spanAttrs, "error.type": err?.constructor?.name ?? "Error" });
+        span.recordException(err);
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw err;
+      } finally {
+        span.end();
+      }
     }) as T;
   }
 

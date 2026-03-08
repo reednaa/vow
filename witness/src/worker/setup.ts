@@ -13,7 +13,7 @@ export async function setupWorker(options: {
 
   const runner = await run({
     connectionString: databaseUrl,
-    concurrency: 1,
+    concurrency: 3,
     taskList: {
       [INDEX_BLOCK_TASK]: createIndexBlockTask(db, signer, fetchBlock),
     },
