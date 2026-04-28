@@ -1,0 +1,50 @@
+{
+  "name": "vow-sdk",
+  "version": "0.1.0",
+  "description": "Stateless TypeScript SDK for the Vow witness protocol e2e flow",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./encoding": {
+      "import": "./dist/encoding.js",
+      "types": "./dist/encoding.d.ts"
+    },
+    "./merkle": {
+      "import": "./dist/merkle.js",
+      "types": "./dist/merkle.d.ts"
+    },
+    "./signing": {
+      "import": "./dist/signing.js",
+      "types": "./dist/signing.d.ts"
+    },
+    "./vow": {
+      "import": "./dist/vow.js",
+      "types": "./dist/vow.d.ts"
+    },
+    "./witness": {
+      "import": "./dist/witness.js",
+      "types": "./dist/witness.d.ts"
+    },
+    "./contracts": {
+      "import": "./dist/contracts.js",
+      "types": "./dist/contracts.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "viem": ">=2.40.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "viem": "^2.47.0"
+  }
+}
