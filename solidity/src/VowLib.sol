@@ -21,7 +21,6 @@ struct SolanaEvent {
 /**
  * @title Vow library
  * @author Alexander (reednaa.eth)
- * @notice
  */
 library VowLib {
   using EfficientHashLib for uint256;
@@ -40,6 +39,10 @@ library VowLib {
   bytes32 internal constant _BARE_EIP712_DOMAIN_TYPEHASH =
     0x20bcc3f8105eea47d067386e42e60246e89393cd61c512edd1e87688890fb914;
 
+  /// @dev Precomputed `keccak256(abi.encode(_BARE_EIP712_DOMAIN_TYPEHASH))`.
+  bytes32 private constant _DOMAIN_SEPARATOR =
+    0x6192106f129ce05c9075d319c1fa6ea9b3ae37cbd0c1ef92e2be7137bb07baa1;
+
   function vowTypehash(
     uint256 chainId,
     uint256 rootBlockNumber,
@@ -53,14 +56,11 @@ library VowLib {
   ) internal pure returns (bytes32 digest) {
     assembly ("memory-safe") {
       let m := mload(0x40) // Load the free memory pointer.
-      mstore(0x00, _BARE_EIP712_DOMAIN_TYPEHASH)
-      // Compute the digest.
-      mstore(0x20, keccak256(0x00, 0x20)) // Store the domain separator.
       mstore(0x00, 0x1901) // Store "\x19\x01".
+      mstore(0x20, _DOMAIN_SEPARATOR) // Store the precomputed domain separator.
       mstore(0x40, structHash) // Store the struct hash.
       digest := keccak256(0x1e, 0x42)
       mstore(0x40, m) // Restore the free memory pointer.
-      mstore(0x60, 0) // Restore the zero pointer.
     }
   }
 

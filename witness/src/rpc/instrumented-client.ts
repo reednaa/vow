@@ -5,20 +5,30 @@ import type { SolanaRpcClient } from "./solana-client.ts";
 type RpcMethod = "getBlock" | "getLogs" | "getBlockNumber";
 type SolanaRpcMethod = "getSlot" | "getBlock" | "getTransaction";
 
+const tracer = trace.getTracer("vow-witness");
+const meter = metrics.getMeter("vow-witness");
+
+const evmDurationHistogram = meter.createHistogram("vow.rpc.duration", {
+  description: "RPC call duration in milliseconds",
+  unit: "ms",
+});
+const evmErrorsCounter = meter.createCounter("vow.rpc.errors", {
+  description: "RPC call error count",
+});
+
+const solanaDurationHistogram = meter.createHistogram("vow.solana.rpc.duration", {
+  description: "Solana RPC call duration in milliseconds",
+  unit: "ms",
+});
+const solanaErrorsCounter = meter.createCounter("vow.solana.rpc.errors", {
+  description: "Solana RPC call error count",
+});
+
 export function instrumentRpcClient(
   client: RpcClient,
   attrs: { url: string; chainId: string },
   parentContext?: Context
 ): RpcClient {
-  const tracer = trace.getTracer("vow-witness");
-  const meter = metrics.getMeter("vow-witness");
-  const durationHistogram = meter.createHistogram("vow.rpc.duration", {
-    description: "RPC call duration in milliseconds",
-    unit: "ms",
-  });
-  const errorsCounter = meter.createCounter("vow.rpc.errors", {
-    description: "RPC call error count",
-  });
 
   function wrapMethod<T extends (...args: any[]) => Promise<any>>(
     method: T,
@@ -36,11 +46,11 @@ export function instrumentRpcClient(
 
       try {
         const result = await method(...args);
-        durationHistogram.record(Date.now() - start, spanAttrs);
+        evmDurationHistogram.record(Date.now() - start, spanAttrs);
         return result;
       } catch (err: any) {
-        durationHistogram.record(Date.now() - start, spanAttrs);
-        errorsCounter.add(1, { ...spanAttrs, "error.type": err?.constructor?.name ?? "Error" });
+        evmDurationHistogram.record(Date.now() - start, spanAttrs);
+        evmErrorsCounter.add(1, { ...spanAttrs, "error.type": err?.constructor?.name ?? "Error" });
         span.recordException(err);
         span.setStatus({ code: SpanStatusCode.ERROR });
         throw err;
@@ -63,15 +73,6 @@ export function instrumentSolanaRpcClient(
   attrs: { url: string; chainId: string },
   parentContext?: Context,
 ): SolanaRpcClient {
-  const tracer = trace.getTracer("vow-witness");
-  const meter = metrics.getMeter("vow-witness");
-  const durationHistogram = meter.createHistogram("vow.solana.rpc.duration", {
-    description: "Solana RPC call duration in milliseconds",
-    unit: "ms",
-  });
-  const errorsCounter = meter.createCounter("vow.solana.rpc.errors", {
-    description: "Solana RPC call error count",
-  });
 
   function wrapMethod<T extends (...args: any[]) => Promise<any>>(
     method: T,
@@ -89,11 +90,11 @@ export function instrumentSolanaRpcClient(
 
       try {
         const result = await method(...args);
-        durationHistogram.record(Date.now() - start, spanAttrs);
+        solanaDurationHistogram.record(Date.now() - start, spanAttrs);
         return result;
       } catch (err: any) {
-        durationHistogram.record(Date.now() - start, spanAttrs);
-        errorsCounter.add(1, {
+        solanaDurationHistogram.record(Date.now() - start, spanAttrs);
+        solanaErrorsCounter.add(1, {
           ...spanAttrs,
           "error.type": err?.constructor?.name ?? "Error",
         });

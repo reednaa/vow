@@ -45,23 +45,6 @@ export function createWitnessController(
         );
 
       if (block) {
-        // Block is indexed — check if event exists
-        const [event] = await db
-          .select()
-          .from(indexedEvents)
-          .where(
-            and(
-              eq(indexedEvents.chainId, chainId),
-              eq(indexedEvents.blockNumber, blockNumberBigInt),
-              eq(indexedEvents.logIndex, logIndex)
-            )
-          );
-
-        if (!event) {
-          set.status = 404;
-          return { error: "Event not found at this logIndex" };
-        }
-
         const allEvents = await db
           .select()
           .from(indexedEvents)
@@ -71,6 +54,12 @@ export function createWitnessController(
               eq(indexedEvents.blockNumber, blockNumberBigInt)
             )
           );
+
+        const event = allEvents.find(e => e.logIndex === logIndex);
+        if (!event) {
+          set.status = 404;
+          return { error: "Event not found at this logIndex" };
+        }
 
         const proof = buildStoredEventProof(allEvents, event.treeIndex);
 

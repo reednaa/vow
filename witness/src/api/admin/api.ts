@@ -150,13 +150,14 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
         set.status = 404;
         return { error: "Chain not found" };
       }
-      // Delete dependents in FK order
-      await db.delete(solanaIndexedEvents).where(eq(solanaIndexedEvents.chainId, chainId));
-      await db.delete(solanaIndexedSlots).where(eq(solanaIndexedSlots.chainId, chainId));
-      await db.delete(indexedEvents).where(eq(indexedEvents.chainId, chainId));
-      await db.delete(indexedBlocks).where(eq(indexedBlocks.chainId, chainId));
-      await db.delete(rpcs).where(eq(rpcs.chainId, chainId));
-      await db.delete(chains).where(eq(chains.chainId, chainId));
+      await db.transaction(async (tx) => {
+        await tx.delete(solanaIndexedEvents).where(eq(solanaIndexedEvents.chainId, chainId));
+        await tx.delete(solanaIndexedSlots).where(eq(solanaIndexedSlots.chainId, chainId));
+        await tx.delete(indexedEvents).where(eq(indexedEvents.chainId, chainId));
+        await tx.delete(indexedBlocks).where(eq(indexedBlocks.chainId, chainId));
+        await tx.delete(rpcs).where(eq(rpcs.chainId, chainId));
+        await tx.delete(chains).where(eq(chains.chainId, chainId));
+      });
       return { ok: true };
     })
 

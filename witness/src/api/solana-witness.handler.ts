@@ -40,9 +40,9 @@ export function createSolanaWitnessController(
         return { error: "Chain not configured" };
       }
 
-      // Look up event by (chainId, txSignature, eventIndexLocal)
-      const [event] = await db
-        .select()
+      // Look up slot by (chainId, txSignature, eventIndexLocal)
+      const [eventLookup] = await db
+        .select({ slot: solanaIndexedEvents.slot })
         .from(solanaIndexedEvents)
         .where(
           and(
@@ -52,7 +52,7 @@ export function createSolanaWitnessController(
           ),
         );
 
-      if (event) {
+      if (eventLookup) {
         // Load the indexed slot for this event
         const [slot] = await db
           .select()
@@ -60,7 +60,7 @@ export function createSolanaWitnessController(
           .where(
             and(
               eq(solanaIndexedSlots.chainId, chainId),
-              eq(solanaIndexedSlots.slot, event.slot),
+              eq(solanaIndexedSlots.slot, eventLookup.slot),
             ),
           );
 
@@ -75,9 +75,15 @@ export function createSolanaWitnessController(
           .where(
             and(
               eq(solanaIndexedEvents.chainId, chainId),
-              eq(solanaIndexedEvents.slot, event.slot),
+              eq(solanaIndexedEvents.slot, eventLookup.slot),
             ),
           );
+
+        const event = allEvents.find(e => e.eventIndexLocal === Number(index));
+        if (!event) {
+          set.status = 404;
+          return { error: "Event not found" };
+        }
 
         const proof = buildStoredEventProof(allEvents, event.treeIndex);
 
