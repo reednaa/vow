@@ -12,6 +12,12 @@ struct Vow {
   bytes32 root;
 }
 
+struct SolanaEvent {
+  bytes32 programId;
+  bytes8 discriminator;
+  bytes data;
+}
+
 /**
  * @title Vow library
  * @author Alexander (reednaa.eth)
@@ -25,6 +31,7 @@ library VowLib {
 
   error InvalidlySignedRoot();
   error TooManyTopics(); // 0x643f8f9e
+  error InvalidEmitCPI(); // 0xf4eabc02
 
   bytes32 private constant VOW_TYPE_HASH =
     keccak256(bytes("Vow(uint256 chainId,uint256 rootBlockNumber,bytes32 root)"));
@@ -234,7 +241,7 @@ library VowLib {
    * │ │ 0xContractAddr...  │03│ topic0 │ topic1 │ topic2 │ data │ │
    * │ │      20 bytes      │1B│ 32 B   │ 32 B   │ 32 B   │ var  │ │
    * │ └────────────────────┴──┴────────┴────────┴────────┴──────┘ │
-   * │   byte: 0              20 21       53       85      117     │
+   * │ Byte 0               20 21       53       85      117       │
    * │                                                             │
    * │  Total: 21 + (N * 32) + len(data) bytes                     │
    * │  Digest: keccak256(encoded)                                 │
@@ -297,6 +304,45 @@ library VowLib {
       let topicsEnd := add(mul(topics.length, 32), 21)
       data.offset := add(evt.offset, topicsEnd)
       data.length := sub(evt.length, topicsEnd)
+    }
+  }
+
+  /**
+   * ┌─────────────────────────────────────────────────────────────┐
+   * │              SOLANA emit_cpi EVENT ENCODING                 │
+   * ├─────────────────────────────────────────────────────────────┤
+   * │                                                             │
+   * │  Byte 0              32             40                      │
+   * │ ┌────────────────────┬───────────────┬────────────────────┐ │
+   * │ │     programId      │ discriminator │  borsh_event_data  │ │
+   * │ │     (32 bytes)     │   (8 bytes)   │      (N bytes)     │ │
+   * │ └────────────────────┴───────────────┴────────────────────┘ │
+   * │                                                             │
+   * │  ┌───────────────────────────────────────────────────────┐  │
+   * │  │ programId     : bytes32 — 32 bytes, Ed25519 pubkey    │  │
+   * │  │ discriminator : bytes8  —  8 bytes, anchor event tag  │  │
+   * │  │                 sha256("event:EventName")[0..8]       │  │
+   * │  │ data          : bytes   — remaining N bytes,          │  │
+   * │  │                 Borsh-serialized event payload        │  │
+   * │  └───────────────────────────────────────────────────────┘  │
+   * │                                                             │
+   * │  Total: 40 + len(data) bytes                                │
+   * │  Digest: keccak256(keccak256(encoded))                      │
+   * │                                                             │
+   * │  Source: innerInstructions[].instructions[].data            │
+   * │  after stripping the 8-byte EVENT_IX_TAG prefix.            │
+   * └─────────────────────────────────────────────────────────────┘
+   */
+  function decodeEmitCPI(
+    bytes calldata evt
+  ) internal pure returns (bytes32 programId, bytes8 discriminator, bytes calldata data) {
+    if (evt.length < 40) revert InvalidEmitCPI();
+    assembly ("memory-safe") {
+      programId := calldataload(evt.offset)
+      let word2 := calldataload(add(evt.offset, 32))
+      discriminator := shr(192, word2)
+      data.offset := add(evt.offset, 40)
+      data.length := sub(evt.length, 40)
     }
   }
 

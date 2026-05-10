@@ -6,6 +6,8 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { setupWorker } from "./worker/setup.ts";
 import { createHealthServer } from "./api/health.server.ts";
 import { createApiServer } from "./api/server.ts";
+// Import Solana schema so Drizzle includes them in migration metadata
+import "./db/schema.ts";
 import path from "path";
 
 async function main() {

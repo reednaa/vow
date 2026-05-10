@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { mountWitnessHandler, type AddJobFn } from "./witness.handler.ts";
+import { mountSolanaWitnessHandler } from "./solana-witness.handler.ts";
 import { createAdminHandler } from "./admin/index.ts";
 
 function applyCorsHeaders(request: Request, set: { headers: Record<string, string> }) {
@@ -39,6 +40,7 @@ export function createApiServer(
     });
 
   mountWitnessHandler(app, db, addJob, witnessSigner);
+  mountSolanaWitnessHandler(app, db, addJob, witnessSigner);
   app.use(createAdminHandler(db, adminPasswordHash, adminJwtSecret));
 
   app.listen(port);
