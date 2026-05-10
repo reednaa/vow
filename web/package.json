@@ -14,6 +14,7 @@
     "test": "playwright test"
   },
   "dependencies": {
+    "@vow/protocol": "file:../typescript",
     "bs58": "^6.0.0",
     "viem": "~2.45.1"
   },

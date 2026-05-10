@@ -1,0 +1,33 @@
+{
+  "name": "@vow/protocol",
+  "version": "0.1.0",
+  "description": "Stateless TypeScript SDK for Vow protocol encoding, witnesses, and viem-compatible contract calls.",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "bs58": "^6.0.0",
+    "viem": "^2.47.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
