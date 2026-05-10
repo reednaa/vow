@@ -1,5 +1,6 @@
 import { type Task } from "graphile-worker";
 import { eq, sql } from "drizzle-orm";
+import { caip2ToNumericChainId } from "../core/chain-utils.ts";
 import { type Hex } from "viem";
 import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 import { createRpcClient, type RpcClient } from "../rpc/client.ts";
@@ -13,7 +14,7 @@ import type { createDb } from "../db/client.ts";
 export const INDEX_BLOCK_TASK = "index-block" as const;
 
 export type IndexBlockPayload = {
-  chainId: number;
+  chainId: string;
   blockNumber: number;
 };
 
@@ -76,7 +77,7 @@ export function createIndexBlockTask(
           if (consistent.events.length === 0) {
             console.log(`[index-block] ${elapsed()} empty block, signing zero-root vow`);
             const sig = await signer.signVow({
-              chainId: BigInt(chainId),
+              chainId: caip2ToNumericChainId(chainId),
               rootBlockNumber: blockNumberBigInt,
               root: ZERO_HASH,
             });
@@ -124,7 +125,7 @@ export function createIndexBlockTask(
           // Sign the Vow struct
           console.log(`[index-block] ${elapsed()} signing vow chainId=${chainId} blockNumber=${blockNumber} root=${merkleRoot}`);
           const sig = await signer.signVow({
-            chainId: BigInt(chainId),
+            chainId: caip2ToNumericChainId(chainId),
             rootBlockNumber: blockNumberBigInt,
             root: merkleRoot,
           });

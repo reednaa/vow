@@ -2,12 +2,13 @@ import { Instance, Server } from "prool";
 
 const TEST_ANVIL_PORT = 18545;
 export const TEST_RPC_URL = `http://127.0.0.1:${TEST_ANVIL_PORT}/1`;
-export const TEST_CHAIN_ID = 31337;
+const TEST_CHAIN_ID_NUMERIC = 31337;
+export const TEST_CHAIN_ID = `eip155:${TEST_CHAIN_ID_NUMERIC}`;
 
 export const anvilServer = Server.create({
   instance: Instance.anvil({
     loadState: new URL("./anvil.state", import.meta.url).pathname,
-    chainId: TEST_CHAIN_ID,
+    chainId: TEST_CHAIN_ID_NUMERIC,
   } as any),
   port: TEST_ANVIL_PORT,
 });

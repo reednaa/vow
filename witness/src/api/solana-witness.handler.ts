@@ -11,6 +11,7 @@ import type { Db } from "../db/client.ts";
 import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeSolanaEvent } from "../core/solana-encoding.ts";
 import { computeVowDigest } from "../core/signing.ts";
+import { caip2ToNumericChainId } from "../core/chain-utils.ts";
 import { INDEX_SOLANA_SLOT_TASK } from "../worker/index-solana-slot.task.ts";
 import { createSolanaRpcClient } from "../rpc/solana-client.ts";
 import { solanaWitnessParams, solanaWitnessResponse } from "./model.ts";
@@ -34,9 +35,7 @@ function resolveCaip2(raw: string): string {
   const match = SOLANA_CAIP2_RE.exec(raw);
   if (!match) throw new Error(`Invalid Solana CAIP-2: ${raw}`);
   const cluster = match[1]!;
-  // If already a full genesis hash, return as-is
   if (cluster.length > 20) return raw;
-  // Resolve alias
   return CAIP2_ALIASES[cluster] ?? raw;
 }
 
@@ -50,10 +49,9 @@ export function createSolanaWitnessController(
     async ({ params, set }) => {
       const { caip2ChainId, txSignature, index } = params;
 
-      // Resolve CAIP-2
-      let caip2: string;
+      let chainId: string;
       try {
-        caip2 = resolveCaip2(caip2ChainId);
+        chainId = resolveCaip2(caip2ChainId);
       } catch {
         set.status = 404;
         return { error: "Invalid chain identifier" };
@@ -63,15 +61,12 @@ export function createSolanaWitnessController(
       const [chain] = await db
         .select()
         .from(chains)
-        .where(eq(chains.caip2, caip2));
+        .where(eq(chains.chainId, chainId));
 
       if (!chain) {
         set.status = 404;
         return { error: "Chain not configured" };
       }
-
-      const chainId: number = chain.chainId;
-      console.log({chainId});
 
       // Look up event by (chainId, txSignature, eventIndexLocal)
       const [event] = await db
@@ -139,7 +134,7 @@ export function createSolanaWitnessController(
               : signature;
           signatureSigner = await recoverAddress({
             hash: computeVowDigest({
-              chainId: BigInt(chainId),
+              chainId: caip2ToNumericChainId(chainId),
               rootBlockNumber: BigInt(event.slot.toString()),
               root: slot.merkleRoot as Hex,
             }),
@@ -178,11 +173,9 @@ export function createSolanaWitnessController(
 
       // Pick first RPC for this chain to get the transaction
       const [rpc] = await db.select().from(rpcs).where(eq(rpcs.chainId, chainId)).limit(1);
-      console.log({rpc})
       const rpcUrl = rpc?.url as string | undefined;
 
       let resolvedSlot: bigint | null = null;
-      console.log({rpcUrl});
       if (rpcUrl) {
         try {
           const solanaClient = createSolanaRpcClient(rpcUrl);

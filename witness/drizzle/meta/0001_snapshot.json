@@ -1,5 +1,5 @@
 {
-  "id": "c7c5c7bb-7b84-4c99-a927-427bc957f251",
+  "id": "e9d36051-f407-44c8-82f1-158a4394df7a",
   "prevId": "38565cfc-71c7-4d83-a5a8-2eba456350de",
   "version": "7",
   "dialect": "postgresql",
@@ -10,14 +10,8 @@
       "columns": {
         "chain_id": {
           "name": "chain_id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "caip2": {
-          "name": "caip2",
           "type": "text",
-          "primaryKey": false,
+          "primaryKey": true,
           "notNull": true
         },
         "latest_block": {
@@ -37,15 +31,7 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "chains_caip2_unique": {
-          "name": "chains_caip2_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "caip2"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -56,7 +42,7 @@
       "columns": {
         "chain_id": {
           "name": "chain_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -134,7 +120,7 @@
       "columns": {
         "chain_id": {
           "name": "chain_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -240,7 +226,7 @@
         },
         "chain_id": {
           "name": "chain_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -279,7 +265,7 @@
       "columns": {
         "chain_id": {
           "name": "chain_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -418,7 +404,7 @@
       "columns": {
         "chain_id": {
           "name": "chain_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },

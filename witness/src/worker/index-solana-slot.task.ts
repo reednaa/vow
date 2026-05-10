@@ -1,5 +1,6 @@
 import { type Task } from "graphile-worker";
 import { eq, sql } from "drizzle-orm";
+import { caip2ToNumericChainId } from "../core/chain-utils.ts";
 import { type Hex } from "viem";
 import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 import { createSolanaRpcClient, type SolanaRpcClient } from "../rpc/solana-client.ts";
@@ -16,7 +17,7 @@ import type { createDb } from "../db/client.ts";
 export const INDEX_SOLANA_SLOT_TASK = "index-solana-slot" as const;
 
 export type IndexSolanaSlotPayload = {
-  chainId: number;
+  chainId: string;
   slot: number;
 };
 
@@ -81,7 +82,7 @@ export function createIndexSolanaSlotTask(
           if (consistent.events.length === 0) {
             console.log(`[index-solana-slot] ${elapsed()} empty slot, signing zero-root vow`);
             const sig = await signer.signVow({
-              chainId: BigInt(chainId),
+              chainId: caip2ToNumericChainId(chainId),
               rootBlockNumber: slotBigInt,
               root: ZERO_HASH,
             });
@@ -129,7 +130,7 @@ export function createIndexSolanaSlotTask(
           // Sign the Vow struct
           console.log(`[index-solana-slot] ${elapsed()} signing vow chainId=${chainId} slot=${slot} root=${merkleRoot}`);
           const sig = await signer.signVow({
-            chainId: BigInt(chainId),
+            chainId: caip2ToNumericChainId(chainId),
             rootBlockNumber: slotBigInt,
             root: merkleRoot,
           });

@@ -7,7 +7,7 @@ type SolanaRpcMethod = "getSlot" | "getBlock" | "getTransaction";
 
 export function instrumentRpcClient(
   client: RpcClient,
-  attrs: { url: string; chainId: number },
+  attrs: { url: string; chainId: string },
   parentContext?: Context
 ): RpcClient {
   const tracer = trace.getTracer("vow-witness");
@@ -23,7 +23,7 @@ export function instrumentRpcClient(
   function wrapMethod<T extends (...args: any[]) => Promise<any>>(
     method: T,
     name: RpcMethod,
-    commonAttrs: { "rpc.url": string; "chain.id": number }
+    commonAttrs: { "rpc.url": string; "chain.id": string }
   ): T {
     return (async (...args: any[]) => {
       const spanAttrs = { "rpc.method": name, ...commonAttrs };
@@ -60,7 +60,7 @@ export function instrumentRpcClient(
 
 export function instrumentSolanaRpcClient(
   client: SolanaRpcClient,
-  attrs: { url: string; chainId: number },
+  attrs: { url: string; chainId: string },
   parentContext?: Context,
 ): SolanaRpcClient {
   const tracer = trace.getTracer("vow-witness");
@@ -76,7 +76,7 @@ export function instrumentSolanaRpcClient(
   function wrapMethod<T extends (...args: any[]) => Promise<any>>(
     method: T,
     name: SolanaRpcMethod,
-    commonAttrs: { "rpc.url": string; "chain.id": number },
+    commonAttrs: { "rpc.url": string; "chain.id": string },
   ): T {
     return (async (...args: any[]) => {
       const spanAttrs = { "rpc.method": name, ...commonAttrs };

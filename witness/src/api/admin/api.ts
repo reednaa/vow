@@ -20,7 +20,6 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
   return new Elysia({ prefix: "/admin/api" })
     .use(jwt({ name: "jwt", secret: jwtSecret }))
     .onBeforeHandle(async ({ jwt, cookie: { adminToken }, set, path }: any) => {
-      // Only guard /admin/api/* (this plugin's routes)
       const payload = await jwt.verify(adminToken?.value);
       if (!payload) {
         set.status = 401;
@@ -69,14 +68,13 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
       const rows = await db
         .select({
           chainId: chains.chainId,
-          caip2: chains.caip2,
           latestBlock: chains.latestBlock,
           updatedAt: chains.updatedAt,
           rpcCount: count(rpcs.id),
         })
         .from(chains)
         .leftJoin(rpcs, eq(rpcs.chainId, chains.chainId))
-        .groupBy(chains.chainId, chains.caip2, chains.latestBlock, chains.updatedAt)
+        .groupBy(chains.chainId, chains.latestBlock, chains.updatedAt)
         .orderBy(chains.chainId);
 
       return rows.map((r: any) => ({
@@ -87,10 +85,11 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
     .post(
       "/chains",
       async ({ body, set }) => {
-        const { chainId, caip2 } = body;
-        if (caip2 !== `eip155:${chainId}`) {
+        const { chainId } = body;
+        // Validate CAIP-2 format
+        if (!/^(eip155:\d+|solana:.+)$/.test(chainId)) {
           set.status = 400;
-          return { error: `caip2 must be "eip155:${chainId}" for chainId ${chainId}` };
+          return { error: `chainId must be a valid CAIP-2 string (e.g., "eip155:1" or "solana:mainnet")` };
         }
         const [existing] = await db
           .select()
@@ -100,13 +99,13 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
           set.status = 409;
           return { error: `Chain ${chainId} already configured` };
         }
-        await db.insert(chains).values({ chainId, caip2 });
+        await db.insert(chains).values({ chainId });
         return { ok: true, chainId };
       },
-      { body: t.Object({ chainId: t.Number(), caip2: t.String() }) }
+      { body: t.Object({ chainId: t.String({ pattern: "^(eip155:\\d+|solana:.+)$" }) }) }
     )
     .delete("/chains/:chainId", async ({ params, set }) => {
-      const chainId = parseInt(params.chainId, 10);
+      const chainId = params.chainId;
       const [existing] = await db
         .select()
         .from(chains)
@@ -125,7 +124,7 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
 
     // ── RPCs ──────────────────────────────────────────────────────────────────
     .get("/chains/:chainId/rpcs", async ({ params, set }) => {
-      const chainId = parseInt(params.chainId, 10);
+      const chainId = params.chainId;
       const [chain] = await db
         .select()
         .from(chains)
@@ -139,7 +138,7 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
     .post(
       "/chains/:chainId/rpcs",
       async ({ params, body, set }) => {
-        const chainId = parseInt(params.chainId, 10);
+        const chainId = params.chainId;
         const [chain] = await db
           .select()
           .from(chains)
@@ -207,9 +206,9 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
       }));
     })
 
-    // ── Indexed blocks per chain ───────────────────────────────────────────────
+    // ── Indexed blocks per chain ──────────────────────────────────────────────
     .get("/chains/:chainId/blocks", async ({ params, set }) => {
-      const chainId = parseInt(params.chainId, 10);
+      const chainId = params.chainId;
       const [chain] = await db
         .select()
         .from(chains)

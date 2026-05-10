@@ -8,6 +8,7 @@ import {
   toBytes,
 } from "viem";
 import { computeVowDigest, createEnvSigner } from "../src/core/signing";
+import { caip2ToNumericChainId } from "../src/core/chain-utils";
 
 const TEST_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const TEST_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -31,9 +32,7 @@ describe("computeVowDigest", () => {
 
   it("domain separator is keccak256('EIP712Domain()')", () => {
     const expected = keccak256(toBytes("EIP712Domain()"));
-    // Known value: keccak256("EIP712Domain()")
     expect(expected).toMatch(/^0x[0-9a-f]{64}$/);
-    // Verify our signing uses this (indirectly: same digest computed twice)
     expect(computeVowDigest(SAMPLE_PARAMS).length).toBe(66);
   });
 
@@ -59,7 +58,6 @@ describe("createEnvSigner", () => {
   it("signVow returns a 64-byte compact hex signature", async () => {
     const signer = createEnvSigner(TEST_PRIVATE_KEY);
     const sig = await signer.signVow(SAMPLE_PARAMS);
-    // 0x + 128 hex chars = 130 total (64 bytes)
     expect(sig.length).toBe(130);
     expect(sig).toMatch(/^0x[0-9a-f]{128}$/);
   });
@@ -71,7 +69,6 @@ describe("signer.signVow", () => {
     const digest = computeVowDigest(SAMPLE_PARAMS);
     const sig = await signer.signVow(SAMPLE_PARAMS);
 
-    // 64 bytes = 0x + 128 hex chars
     expect(sig.length).toBe(130);
 
     const recoverableSignature = sig.length === 130
@@ -86,5 +83,18 @@ describe("signer.signVow", () => {
     const sig1 = await signer.signVow(SAMPLE_PARAMS);
     const sig2 = await signer.signVow(SAMPLE_PARAMS);
     expect(sig1).toBe(sig2);
+  });
+});
+
+describe("caip2ToNumericChainId", () => {
+  it("parses EVM CAIP-2 correctly", () => {
+    expect(caip2ToNumericChainId("eip155:1")).toBe(1n);
+    expect(caip2ToNumericChainId("eip155:31337")).toBe(31337n);
+    expect(caip2ToNumericChainId("eip155:99991")).toBe(99991n);
+  });
+
+  it("throws for invalid CAIP-2", () => {
+    expect(() => caip2ToNumericChainId("eth:1")).toThrow("Cannot extract numeric chain ID");
+    expect(() => caip2ToNumericChainId("bitcoin:1")).toThrow("Cannot extract numeric chain ID");
   });
 });

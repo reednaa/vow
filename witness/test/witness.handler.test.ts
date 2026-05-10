@@ -9,9 +9,10 @@ import { createHealthServer } from "../src/api/health.server";
 import { encodeEvent, computeLeafHash } from "../src/core/encoding";
 import { buildMerkleTree, generateProof, verifyProof } from "../src/core/merkle";
 import { createEnvSigner } from "../src/core/signing";
+import { caip2ToNumericChainId } from "../src/core/chain-utils";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
-const TEST_CHAIN_ID = 99992;
+const TEST_CHAIN_ID = "eip155:99992";
 const API_PORT = 13001;
 const HEALTH_PORT = 13002;
 
@@ -69,7 +70,6 @@ beforeAll(async () => {
   // Seed chain
   await db.insert(chains).values({
     chainId: TEST_CHAIN_ID,
-    caip2: `eip155:${TEST_CHAIN_ID}`,
   });
   await db.insert(rpcs).values([
     { chainId: TEST_CHAIN_ID, url: "http://rpc1.test" },
@@ -91,7 +91,7 @@ beforeAll(async () => {
   const signer = createEnvSigner(ANVIL_KEY);
   MOCK_WITNESS_SIGNER = signer.address();
   MOCK_SIGNATURE = await signer.signVow({
-    chainId: BigInt(TEST_CHAIN_ID),
+    chainId: caip2ToNumericChainId(TEST_CHAIN_ID),
     rootBlockNumber: MOCK_BLOCK_NUMBER,
     root: merkleRoot,
   });
@@ -169,7 +169,7 @@ afterAll(async () => {
 describe("GET /witness", () => {
   it("returns ready with valid proof for indexed event", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/eip155:${TEST_CHAIN_ID}/${Number(MOCK_BLOCK_NUMBER)}/0`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(MOCK_BLOCK_NUMBER)}/0`
     );
     expect(res.status).toBe(200);
     const body = await res.json() as any;
@@ -199,7 +199,7 @@ describe("GET /witness", () => {
 
   it("returns error status when stored signature is unrecoverable", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/eip155:${TEST_CHAIN_ID}/${Number(MOCK_BLOCK_NUMBER_BAD_SIG)}/0`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(MOCK_BLOCK_NUMBER_BAD_SIG)}/0`
     );
     expect(res.status).toBe(200);
     const body = await res.json() as any;
@@ -209,7 +209,7 @@ describe("GET /witness", () => {
 
   it("returns 404 for indexed block but non-existent logIndex", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/eip155:${TEST_CHAIN_ID}/${Number(MOCK_BLOCK_NUMBER)}/999`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(MOCK_BLOCK_NUMBER)}/999`
     );
     expect(res.status).toBe(404);
   });
@@ -223,7 +223,7 @@ describe("GET /witness", () => {
 
   it("returns pending for unindexed block and creates a job", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/eip155:${TEST_CHAIN_ID}/99999/0`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/99999/0`
     );
     expect(res.status).toBe(200);
     const body = await res.json() as any;
@@ -231,7 +231,7 @@ describe("GET /witness", () => {
 
     // Second request should also return pending (job already exists)
     const res2 = await fetch(
-      `${BASE_URL}/witness/eip155:${TEST_CHAIN_ID}/99999/0`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/99999/0`
     );
     const body2 = await res2.json() as any;
     expect(body2.status).toBe("pending");
