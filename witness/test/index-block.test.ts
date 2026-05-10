@@ -11,10 +11,15 @@ import {
 import { createDb, closeDb } from "../src/db/client";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../src/db/schema";
 import { createIndexBlockTask } from "../src/worker/index-block.task";
-import { createEnvSigner, computeVowDigest } from "../src/core/signing";
-import { caip2ToNumericChainId } from "../src/core/chain-utils";
-import { buildMerkleTree, ZERO_HASH } from "../src/core/merkle";
-import { encodeEvent, computeLeafHash } from "../src/core/encoding";
+import {
+  buildMerkleTree,
+  caip2ToNumericChainId,
+  computeLeafHash,
+  computeVowDigest,
+  encodeEthereumEvent as encodeEvent,
+  ZERO_HASH,
+} from "@vow/protocol";
+import { createEnvSigner } from "../src/core/signing";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const TEST_CHAIN_ID = "eip155:99991";

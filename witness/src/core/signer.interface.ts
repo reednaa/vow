@@ -1,3 +1,4 @@
+import type { Hex } from "viem";
 import type { VowParams } from "@vow/protocol";
 
 export type { VowParams };

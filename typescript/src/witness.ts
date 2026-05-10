@@ -6,6 +6,7 @@ import type {
   PollOptions,
   SignedWitness,
   SolanaWitnessResult,
+  FetchFn,
   WitnessFetchResponse,
   WitnessRequest,
   WitnessResponseStatus,
@@ -32,7 +33,7 @@ export function buildWitnessUrl(url: string, request: WitnessRequest): string {
 export async function fetchWitness(
   url: string,
   request: WitnessRequest,
-  fetchFn: typeof fetch = globalThis.fetch,
+  fetchFn: FetchFn = globalThis.fetch,
 ): Promise<WitnessFetchResponse> {
   const res = await fetchFn(buildWitnessUrl(url, request));
   if (!res.ok) {
@@ -45,8 +46,11 @@ export async function fetchWitness(
     error?: string;
   };
 
-  if (body.status !== "ready" || !body.witness) {
+  if (body.status !== "ready") {
     return { status: body.status, error: body.error };
+  }
+  if (!body.witness) {
+    throw new Error("Ready status but no witness payload");
   }
 
   if (request.mode === "ethereum") {

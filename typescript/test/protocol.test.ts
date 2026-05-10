@@ -195,7 +195,16 @@ describe("Vow encoding", () => {
     expect(() =>
       mergeWitnesses([
         { witness: makeEthereumWitness(), signerIndex: 1 },
-        { witness: makeSolanaWitness() as WitnessResult, signerIndex: 2 },
+        {
+          witness: makeEthereumWitness({
+            event: {
+              emitter: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+              topics: [TOPIC],
+              data: DATA,
+            },
+          }),
+          signerIndex: 2,
+        },
       ]),
     ).toThrow("same event");
   });

@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { eq, count, desc, sql } from "drizzle-orm";
 import { createPublicClient, http } from "viem";
+import { normalizeChainId } from "@vow/protocol";
 import {
   chains,
   rpcs,
@@ -15,7 +16,6 @@ import {
   graphileWorkerPrivateTasks,
 } from "../../db/graphile-worker.ts";
 import type { Db } from "../../db/client.ts";
-import { normalizeChainId } from "../../core/chain-utils.ts";
 import { createSolanaRpcClient } from "../../rpc/solana-client.ts";
 
 async function validateRpc(

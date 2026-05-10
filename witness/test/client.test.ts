@@ -1,12 +1,12 @@
 import { describe, it, expect } from "bun:test";
 import { type Address, type Hex, toBytes, toHex } from "viem";
 import {
+  caip2ToNumericChainId,
+  encodeEthereumEvent as encodeEvent,
   encodeVow,
-  type WitnessResult,
   type SignedWitness,
-} from "../src/client/index.ts";
-import { caip2ToNumericChainId } from "../src/core/chain-utils.ts";
-import { encodeEvent } from "../src/core/encoding.ts";
+  type EthereumWitnessResult,
+} from "@vow/protocol";
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -17,8 +17,10 @@ const PROOF_HASH = ("0x" + "bb".repeat(32)) as Hex;
 const SIG = ("0x" + "cc".repeat(65)) as Hex;
 const SIG2 = ("0x" + "dd".repeat(65)) as Hex;
 
-function makeWitness(overrides?: Partial<WitnessResult>): WitnessResult {
+function makeWitness(overrides?: Partial<EthereumWitnessResult>): EthereumWitnessResult {
   return {
+    mode: "ethereum",
+    signer: "0x0000000000000000000000000000000000000001",
     chainId: "eip155:31337",
     rootBlockNumber: 90,
     proof: [PROOF_HASH],

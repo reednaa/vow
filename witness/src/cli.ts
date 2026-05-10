@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { parseArgs } from "util";
-import { fetchAndEncodeVow, type WitnessEndpoint } from "./client/index.ts";
+import { fetchAndEncodeVow, type WitnessSource } from "@vow/protocol";
 
 const USAGE = `Usage:
   vow-witness fetch-and-encode \\
@@ -59,7 +59,7 @@ if (!Number.isInteger(logIndex) || logIndex < 0) {
   die(`Invalid --log-index value: "${values["log-index"]}"`);
 }
 
-const endpoints: WitnessEndpoint[] = values.endpoint.map((s) => {
+const endpoints: WitnessSource[] = values.endpoint.map((s) => {
   const atIdx = s.indexOf("@");
   if (atIdx <= 0) {
     die(`Invalid --endpoint format "${s}". Expected "<signerIndex>@<url>".`);
@@ -79,9 +79,12 @@ const timeoutMs = values.timeout ? Number(values.timeout) : undefined;
 try {
   const result = await fetchAndEncodeVow(
     endpoints,
-    values.chain,
-    blockNumber,
-    logIndex,
+    {
+      mode: "ethereum",
+      chainId: values.chain,
+      blockNumber,
+      logIndex,
+    },
     { pollIntervalMs, timeoutMs }
   );
   process.stdout.write(result + "\n");

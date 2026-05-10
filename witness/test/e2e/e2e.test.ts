@@ -21,11 +21,15 @@ import { createDb, closeDb } from "../../src/db/client";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../../src/db/schema";
 import { setupWorker } from "../../src/worker/setup";
 import { mountWitnessHandler } from "../../src/api/witness.handler";
-import { encodeEvent, computeLeafHash } from "../../src/core/encoding";
-import { verifyProof } from "../../src/core/merkle";
-import { createEnvSigner, computeVowDigest } from "../../src/core/signing";
-import { caip2ToNumericChainId } from "../../src/core/chain-utils";
-import { encodeVow } from "../../src/client/index";
+import {
+  caip2ToNumericChainId,
+  computeLeafHash,
+  computeVowDigest,
+  encodeEthereumEvent as encodeEvent,
+  encodeVow,
+  verifyProof,
+} from "@vow/protocol";
+import { createEnvSigner } from "../../src/core/signing";
 import { startAnvil, stopAnvil, TEST_RPC_URL, TEST_CHAIN_ID } from "./harness";
 
 // ── constants ────────────────────────────────────────────────────────────────
@@ -337,6 +341,8 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
     const vowHex = encodeVow([
       {
         witness: {
+          mode: "ethereum",
+          signer: witness.signer as Address,
           chainId: witness.chainId as string,
           rootBlockNumber: witness.rootBlockNumber,
           proof: witness.proof as Hex[],

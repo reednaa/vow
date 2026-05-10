@@ -1,6 +1,10 @@
 import { type Address, type Hex } from "viem";
 import { type RpcClient } from "./client.ts";
-import { encodeEvent, computeLeafHash, decodeEvent } from "../core/encoding.ts";
+import {
+  computeLeafHash,
+  decodeEthereumEvent,
+  encodeEthereumEvent,
+} from "@vow/protocol";
 import type { SolanaRpcClient } from "./solana-client.ts";
 import { extractEmitCpiEvents } from "./solana-client.ts";
 
@@ -71,7 +75,7 @@ export async function fetchBlockConsistent(
     logs
       .sort((a, b) => a.logIndex - b.logIndex)
       .map((log) => {
-        const canonicalBytes = encodeEvent(log.address, log.topics, log.data);
+        const canonicalBytes = encodeEthereumEvent(log.address, log.topics, log.data);
         const leafHash = computeLeafHash(canonicalBytes);
         return { logIndex: log.logIndex, leafHash: leafHash.toLowerCase(), canonicalBytes };
       })
@@ -100,7 +104,7 @@ export async function fetchBlockConsistent(
 
   // Reconstruct full event info from first RPC's logs (already consistent)
   const events = referenceSet.map((tuple) => {
-    const { emitter, topics, data } = decodeEvent(tuple.canonicalBytes);
+    const { emitter, topics, data } = decodeEthereumEvent(tuple.canonicalBytes);
     return {
       logIndex: tuple.logIndex,
       leafHash: tuple.leafHash as Hex,

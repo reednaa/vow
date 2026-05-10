@@ -42,8 +42,8 @@ const readyWitness = {
   },
 };
 
-function jsonFetch(body: unknown): typeof fetch {
-  return (async () => Response.json(body)) as typeof fetch;
+function jsonFetch(body: unknown) {
+  return async () => Response.json(body);
 }
 
 describe("witness fetching", () => {
@@ -78,12 +78,12 @@ describe("witness fetching", () => {
   it("polls until ready and encodes witnesses", async () => {
     let calls = 0;
     const statuses: string[] = [];
-    const fetchMock = (async () => {
+    const fetchMock = async () => {
       calls += 1;
       return calls === 1
         ? Response.json({ status: "pending" })
         : Response.json({ status: "ready", witness: readyWitness });
-    }) as typeof fetch;
+    };
 
     const witness = await pollWitness("https://witness.example.com", ethereumRequest, {
       fetch: fetchMock,

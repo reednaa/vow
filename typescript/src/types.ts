@@ -64,6 +64,8 @@ export interface SignedWitness {
   signerIndex: number;
 }
 
+export type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
 export type WitnessFetchResponse =
   | { status: "ready"; witness: WitnessResult }
   | { status: Exclude<WitnessResponseStatus, "ready">; error?: string };
@@ -72,7 +74,7 @@ export interface PollOptions {
   pollIntervalMs?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
-  fetch?: typeof fetch;
+  fetch?: FetchFn;
   onStatus?: (status: WitnessResponseStatus) => void;
 }
 

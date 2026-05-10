@@ -13,10 +13,15 @@ import { createDb, closeDb } from "../src/db/client";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../src/db/schema";
 import { setupWorker } from "../src/worker/setup";
 import { createWitnessController } from "../src/api/witness.handler";
-import { encodeEvent, computeLeafHash } from "../src/core/encoding";
-import { buildMerkleTree, verifyProof } from "../src/core/merkle";
-import { createEnvSigner, computeVowDigest } from "../src/core/signing";
-import { caip2ToNumericChainId } from "../src/core/chain-utils";
+import {
+  buildMerkleTree,
+  caip2ToNumericChainId,
+  computeLeafHash,
+  computeVowDigest,
+  encodeEthereumEvent as encodeEvent,
+  verifyProof,
+} from "@vow/protocol";
+import { createEnvSigner } from "../src/core/signing";
 import { type ConsistentBlockResult } from "../src/rpc/consistency";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";

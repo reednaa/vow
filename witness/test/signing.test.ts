@@ -7,8 +7,8 @@ import {
   recoverAddress,
   toBytes,
 } from "viem";
-import { computeVowDigest, createEnvSigner } from "../src/core/signing";
-import { caip2ToNumericChainId, normalizeChainId } from "../src/core/chain-utils";
+import { caip2ToNumericChainId, computeVowDigest, normalizeChainId } from "@vow/protocol";
+import { createEnvSigner } from "../src/core/signing";
 
 const TEST_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const TEST_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";

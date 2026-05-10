@@ -12,13 +12,11 @@ import {
 import { createSolanaWitnessController } from "../src/api/solana-witness.handler";
 import {
   caip2ToNumericChainId,
-  normalizeChainId,
-} from "../src/core/chain-utils";
-import { createEnvSigner } from "../src/core/signing";
-import {
-  computeSolanaLeafHash,
+  computeLeafHash,
   encodeSolanaEvent,
-} from "../src/core/solana-encoding";
+  normalizeChainId,
+} from "@vow/protocol";
+import { createEnvSigner } from "../src/core/signing";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const TEST_CHAIN_ID = normalizeChainId("solana:mainnet");
@@ -135,7 +133,7 @@ describe("GET /witness/solana", () => {
     const discriminator = new Uint8Array(8).fill(3);
     const data = Uint8Array.from([1, 2, 3, 4]);
     const canonicalBytes = encodeSolanaEvent(programId, discriminator, data);
-    const leafHash = computeSolanaLeafHash(canonicalBytes);
+    const leafHash = computeLeafHash(canonicalBytes);
     const signature = await SIGNER.signVow({
       chainId: caip2ToNumericChainId(TEST_CHAIN_ID),
       rootBlockNumber: slot,

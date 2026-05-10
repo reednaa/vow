@@ -1,13 +1,16 @@
 import { Elysia } from "elysia";
 import { eq, and } from "drizzle-orm";
 import type { Hex } from "viem";
+import {
+  buildStoredEventProof,
+  decodeEthereumEvent,
+  normalizeChainId,
+  recoverVowSigner,
+} from "@vow/protocol";
 import { chains, indexedBlocks, indexedEvents } from "../db/schema.ts";
 import type { Db } from "../db/client.ts";
-import { decodeEvent } from "../core/encoding.ts";
-import { normalizeChainId } from "../core/chain-utils.ts";
 import { INDEX_BLOCK_TASK } from "../worker/index-block.task.ts";
 import { witnessParams, witnessResponse } from "./model.ts";
-import { buildStoredEventProof, recoverVowSigner } from "./proof.ts";
 import { type AddJobFn, enqueueIndexingJob } from "./jobs.ts";
 
 export function createWitnessController(
@@ -64,7 +67,7 @@ export function createWitnessController(
         const proof = buildStoredEventProof(allEvents, event.treeIndex);
 
         const canonicalBytes = Buffer.from(event.canonicalBytes, "hex");
-        const { emitter, topics, data } = decodeEvent(new Uint8Array(canonicalBytes));
+        const { emitter, topics, data } = decodeEthereumEvent(new Uint8Array(canonicalBytes));
         let signatureSigner: string;
         try {
           signatureSigner = await recoverVowSigner({

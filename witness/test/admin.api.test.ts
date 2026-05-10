@@ -11,7 +11,7 @@ import {
   solanaIndexedSlots,
 } from "../src/db/schema";
 import { createAdminApiPlugin } from "../src/api/admin/api";
-import { normalizeChainId } from "../src/core/chain-utils";
+import { normalizeChainId } from "@vow/protocol";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const JWT_SECRET = "test-secret-for-admin-api";

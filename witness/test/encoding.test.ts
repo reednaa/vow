@@ -1,6 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import { type Address, type Hex, toBytes, toHex, keccak256 } from "viem";
-import { encodeEvent, computeLeafHash, decodeEvent } from "../src/core/encoding";
+import {
+  computeLeafHash,
+  decodeEthereumEvent as decodeEvent,
+  encodeEthereumEvent as encodeEvent,
+} from "@vow/protocol";
 
 const ZERO_EMITTER = "0x0000000000000000000000000000000000000000" as Address;
 const SAMPLE_EMITTER = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF" as Address;

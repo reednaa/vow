@@ -5,7 +5,7 @@ import bs58 from "bs58";
 import {
   isEmitCpi,
   extractEmitCpiEncoding,
-} from "../core/solana-encoding.ts";
+} from "@vow/protocol";
 
 // --- Solana Block Types (from RPC JSON parsed output) ---
 

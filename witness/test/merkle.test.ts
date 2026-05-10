@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { type Hex, keccak256, toBytes, toHex } from "viem";
-import { buildMerkleTree, generateProof, verifyProof } from "../src/core/merkle";
+import { buildMerkleTree, generateProof, verifyProof } from "@vow/protocol";
 
 function makeLeaf(n: number): Hex {
   const b = new Uint8Array(32);

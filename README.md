@@ -7,6 +7,7 @@ The project is split into two parts:
 
 - [`/witness`](/witness): offchain witness service that indexes blocks, canonicalizes events, builds Merkle roots, signs roots, and serves proofs for individual events.
 - [`/solidity`](/solidity): onchain verification library and witness directory contracts that validate witness signatures plus Merkle proofs and return raw canonical event bytes for consumer-selected decoding.
+- [`/typescript`](/typescript): stateless TypeScript SDK for canonical encoding, Merkle proofs, typed-data signing structures, witness polling, proof merging, and viem-compatible `VowLib` calls.
 
 ## Project Goal
 
@@ -24,3 +25,14 @@ Create the cheapest, most flexible, and most efficient cross-chain messaging-adj
 4. Consumer contracts call `VowLib.processVow(...)` to verify quorum signatures and proof membership, then decode the returned raw event bytes with the strategy they expect.
 
 This gives applications a clear trust model: cryptographic proof of inclusion plus an explicit witness quorum policy.
+
+## TypeScript SDK
+
+`@vow/protocol` is the shared TypeScript package for protocol consumers and witness operators. It exposes stateless helpers for the full client flow:
+
+1. Poll one or more witness services with `pollWitness` / `fetchWitnesses`.
+2. Merge and sort witness attestations with `mergeWitnesses`.
+3. Encode the final `bytes vow` payload with `encodeVow`.
+4. Validate configured witness signers and call `VowLib.processVow` through caller-provided viem `readContract` / `estimateContractGas` functions.
+
+The SDK intentionally does not own transaction execution or private-key signing. Signing helpers accept an external viem-compatible `signTypedData` function.

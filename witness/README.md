@@ -2,6 +2,8 @@
 
 `vow-witness` is an EVM and Solana event attestation service. It indexes EVM block logs and Solana `emit_cpi!()` events, builds a Merkle tree over canonical event encodings, signs the root, and serves event-level witness payloads over HTTP.
 
+Protocol-critical TypeScript primitives live in [`../typescript`](../typescript) as `@vow/protocol`. The witness service uses that SDK for CAIP-2 normalization, event encoding, Merkle proofs, Vow typed-data digests, signer recovery, and client payload encoding.
+
 ## What This Service Does
 
 - Accepts EVM witness requests by chain/block/log index and Solana witness requests by chain/transaction/event index.
@@ -151,6 +153,8 @@ while true; do
   sleep 2
 done
 ```
+
+Client applications should prefer `@vow/protocol` for witness polling and final Vow payload construction instead of reimplementing the wire format.
 
 ## Useful Checks
 
