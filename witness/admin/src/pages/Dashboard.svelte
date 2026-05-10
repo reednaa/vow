@@ -30,14 +30,13 @@
   }
 
   async function addChain() {
-    const id = parseInt(newChainId, 10);
-    if (!id || isNaN(id)) return;
+    if (!newChainId) return;
     addingChain = true;
     addError = "";
     addSuccess = "";
     try {
-      await api.addChain(id, `eip155:${id}`);
-      addSuccess = `Chain ${id} added`;
+      await api.addChain(newChainId);
+      addSuccess = `Chain ${newChainId} added`;
       newChainId = "";
       await load();
     } catch (e: any) {
@@ -47,7 +46,7 @@
     }
   }
 
-  async function deleteChain(chainId: number) {
+  async function deleteChain(chainId: string) {
     if (!confirm(`Delete chain ${chainId} and all its data? This cannot be undone.`)) return;
     try {
       await api.deleteChain(chainId);
@@ -110,19 +109,18 @@
       {#if addSuccess}<div class="alert alert-success">{addSuccess}</div>{/if}
       <div class="form-row">
         <input
-          type="number"
-          placeholder="Chain ID (e.g. 1 for Ethereum)"
+          type="text"
+          placeholder="CAIP-2 chain ID (e.g. eip155:1 for Ethereum, solana:mainnet)"
           bind:value={newChainId}
-          min="1"
           on:keydown={(e) => e.key === "Enter" && addChain()}
-          style="max-width: 320px;"
+          style="max-width: 480px;"
         />
         <button class="btn-primary" on:click={addChain} disabled={addingChain || !newChainId}>
           {addingChain ? "Adding…" : "Add Chain"}
         </button>
       </div>
       <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">
-        CAIP-2 identifier will be set to <code>eip155:&lt;chainId&gt;</code> automatically.
+        Enter a CAIP-2 identifier: <code>eip155:&lt;chainId&gt;</code> for EVM chains, <code>solana:&lt;cluster&gt;</code> for Solana.
       </p>
     </div>
   </div>
@@ -142,7 +140,6 @@
         <thead>
           <tr>
             <th>Chain ID</th>
-            <th>CAIP-2</th>
             <th>Latest Indexed Block</th>
             <th>RPCs</th>
             <th></th>
@@ -156,7 +153,6 @@
                   {chain.chainId}
                 </a>
               </td>
-              <td class="mono">{chain.caip2}</td>
               <td class="mono">{chain.latestBlock ?? "—"}</td>
               <td>
                 <span style="color: {chain.rpcCount < 2 ? 'var(--warning)' : 'inherit'}">

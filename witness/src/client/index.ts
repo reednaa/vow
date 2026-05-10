@@ -1,11 +1,12 @@
 import { type Address, type Hex, toBytes, toHex } from "viem";
 import { encodeEvent } from "../core/encoding.ts";
+import { caip2ToNumericChainId } from "../core/chain-utils.ts";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /** Minimized witness response — just the fields needed to encode a Vow */
 export interface WitnessResult {
-  chainId: number;
+  chainId: string;
   rootBlockNumber: number;
   proof: Hex[];
   signature: Hex;
@@ -107,7 +108,7 @@ export function encodeVow(witnesses: SignedWitness[]): Hex {
   const view = new DataView(buf.buffer);
 
   // Header
-  writePad32(buf, 0, BigInt(first.chainId));
+  writePad32(buf, 0, caip2ToNumericChainId(first.chainId));
   writePad32(buf, 32, BigInt(first.rootBlockNumber));
   buf[64] = P;
   buf[65] = S;

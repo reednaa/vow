@@ -1,0 +1,65 @@
+-- Phase A: Create new Solana tables with text chain_id
+CREATE TABLE "solana_indexed_events" (
+	"chain_id" text NOT NULL,
+	"slot" bigint NOT NULL,
+	"tx_signature" text NOT NULL,
+	"event_index_local" integer NOT NULL,
+	"event_index" integer NOT NULL,
+	"tree_index" integer NOT NULL,
+	"leaf_hash" text NOT NULL,
+	"canonical_bytes" text NOT NULL,
+	CONSTRAINT "solana_indexed_events_chain_id_slot_event_index_pk" PRIMARY KEY("chain_id","slot","event_index")
+);
+--> statement-breakpoint
+CREATE TABLE "solana_indexed_slots" (
+	"chain_id" text NOT NULL,
+	"slot" bigint NOT NULL,
+	"blockhash" text NOT NULL,
+	"merkle_root" text NOT NULL,
+	"latest_slot_at_index" bigint NOT NULL,
+	"signature" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now(),
+	CONSTRAINT "solana_indexed_slots_chain_id_slot_pk" PRIMARY KEY("chain_id","slot")
+);
+
+-- Phase B: Drop compound PKs and FKs from existing EVM tables
+--> statement-breakpoint
+ALTER TABLE "indexed_blocks" DROP CONSTRAINT "indexed_blocks_chain_id_block_number_pk";
+ALTER TABLE "indexed_events" DROP CONSTRAINT "indexed_events_chain_id_block_number_log_index_pk";
+DROP INDEX IF EXISTS "idx_events_tree";
+--> statement-breakpoint
+ALTER TABLE "rpcs" DROP CONSTRAINT "rpcs_chain_id_chains_chain_id_fk";
+ALTER TABLE "indexed_blocks" DROP CONSTRAINT "indexed_blocks_chain_id_chains_chain_id_fk";
+ALTER TABLE "indexed_events" DROP CONSTRAINT "indexed_events_chain_id_chains_chain_id_fk";
+
+-- Phase C: Change chain_id column types from integer to text
+--> statement-breakpoint
+ALTER TABLE "chains" DROP CONSTRAINT "chains_pkey";
+ALTER TABLE "chains" DROP CONSTRAINT "chains_caip2_unique";
+ALTER TABLE "chains" ALTER COLUMN "chain_id" SET DATA TYPE text;
+ALTER TABLE "indexed_blocks" ALTER COLUMN "chain_id" SET DATA TYPE text;
+ALTER TABLE "indexed_events" ALTER COLUMN "chain_id" SET DATA TYPE text;
+ALTER TABLE "rpcs" ALTER COLUMN "chain_id" SET DATA TYPE text;
+
+-- Phase D: Rebuild chains table — drop caip2, make chain_id the PK
+--> statement-breakpoint
+ALTER TABLE "chains" DROP COLUMN "caip2";
+ALTER TABLE "chains" ADD PRIMARY KEY ("chain_id");
+
+-- Phase E: Recreate EVM compound PKs and FKs
+--> statement-breakpoint
+ALTER TABLE "indexed_blocks" ADD CONSTRAINT "indexed_blocks_chain_id_block_number_pk" PRIMARY KEY ("chain_id", "block_number");
+ALTER TABLE "indexed_events" ADD CONSTRAINT "indexed_events_chain_id_block_number_log_index_pk" PRIMARY KEY ("chain_id", "block_number", "log_index");
+CREATE INDEX "idx_events_tree" ON "indexed_events" USING btree ("chain_id", "block_number", "tree_index");
+--> statement-breakpoint
+ALTER TABLE "rpcs" ADD CONSTRAINT "rpcs_chain_id_chains_chain_id_fk" FOREIGN KEY ("chain_id") REFERENCES "chains"("chain_id") ON DELETE CASCADE;
+ALTER TABLE "indexed_blocks" ADD CONSTRAINT "indexed_blocks_chain_id_chains_chain_id_fk" FOREIGN KEY ("chain_id") REFERENCES "chains"("chain_id") ON DELETE CASCADE;
+ALTER TABLE "indexed_events" ADD CONSTRAINT "indexed_events_chain_id_chains_chain_id_fk" FOREIGN KEY ("chain_id") REFERENCES "chains"("chain_id") ON DELETE CASCADE;
+
+-- Phase F: Solana FKs and indexes
+--> statement-breakpoint
+ALTER TABLE "solana_indexed_events" ADD CONSTRAINT "solana_indexed_events_chain_id_chains_chain_id_fk" FOREIGN KEY ("chain_id") REFERENCES "chains"("chain_id") ON DELETE CASCADE;
+ALTER TABLE "solana_indexed_slots" ADD CONSTRAINT "solana_indexed_slots_chain_id_chains_chain_id_fk" FOREIGN KEY ("chain_id") REFERENCES "chains"("chain_id") ON DELETE CASCADE;
+--> statement-breakpoint
+CREATE INDEX "idx_solana_events_tree" ON "solana_indexed_events" USING btree ("chain_id","slot","tree_index");
+CREATE INDEX "idx_solana_events_lookup" ON "solana_indexed_events" USING btree ("chain_id","tx_signature","event_index_local");

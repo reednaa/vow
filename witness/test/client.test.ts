@@ -5,6 +5,7 @@ import {
   type WitnessResult,
   type SignedWitness,
 } from "../src/client/index.ts";
+import { caip2ToNumericChainId } from "../src/core/chain-utils.ts";
 import { encodeEvent } from "../src/core/encoding.ts";
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -18,7 +19,7 @@ const SIG2 = ("0x" + "dd".repeat(65)) as Hex;
 
 function makeWitness(overrides?: Partial<WitnessResult>): WitnessResult {
   return {
-    chainId: 31337,
+    chainId: "eip155:31337",
     rootBlockNumber: 90,
     proof: [PROOF_HASH],
     signature: SIG,
@@ -40,7 +41,9 @@ describe("encodeVow", () => {
 
     // Read header
     const view = new DataView(bytes.buffer);
-    // chainId at offset 0 (last 4 bytes of 32)
+    // chainId at offset 0 — encoded as caip2ToNumericChainId("eip155:31337") = 31337n
+    const numericChainId = caip2ToNumericChainId("eip155:31337");
+    expect(numericChainId).toBe(31337n);
     expect(bytes[31]).toBe(31337 & 0xff);
 
     // P=1, S=1
@@ -96,8 +99,8 @@ describe("encodeVow", () => {
   it("throws if witnesses have different chainId", () => {
     expect(() =>
       encodeVow([
-        { witness: makeWitness({ chainId: 1 }), signerIndex: 1 },
-        { witness: makeWitness({ chainId: 2 }), signerIndex: 2 },
+        { witness: makeWitness({ chainId: "eip155:1" }), signerIndex: 1 },
+        { witness: makeWitness({ chainId: "eip155:2" }), signerIndex: 2 },
       ])
     ).toThrow("same chainId");
   });

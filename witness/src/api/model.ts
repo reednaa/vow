@@ -16,7 +16,7 @@ const witnessReady = t.Object({
   status: t.Literal("ready"),
   witness: t.Object({
     signer: t.String(),
-    chainId: t.Number(),
+    chainId: t.String(),
     latestBlockNumber: t.Number(),
     rootBlockNumber: t.Number(),
     root: t.String(),
@@ -41,5 +41,44 @@ export const witnessResponse = {
   404: witnessError,
 };
 
+// --- Solana ---
+
+const solanaWitnessEvent = t.Object({
+  programId: t.String(),
+  discriminator: t.String(),
+  data: t.String(),
+});
+
+const solanaWitnessReady = t.Object({
+  status: t.Literal("ready"),
+  witness: t.Object({
+    signer: t.String(),
+    chainId: t.String(),
+    latestSlot: t.Number(),
+    rootSlot: t.Number(),
+    root: t.String(),
+    blockhash: t.String(),
+    proof: t.Array(t.String()),
+    signature: t.String(),
+    event: solanaWitnessEvent,
+  }),
+});
+
+export const solanaWitnessParams = t.Object({
+  caip2ChainId: t.String({
+    pattern:
+      "^solana:(mainnet|5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d|devnet|EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG|testnet|4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY)$",
+  }),
+  txSignature: t.String({ minLength: 1 }),
+  index: t.Numeric({ minimum: 0 }),
+});
+
+export const solanaWitnessResponse = {
+  200: t.Union([solanaWitnessReady, witnessStatusOnly]),
+  404: witnessError,
+};
+
 export type WitnessParams = UnwrapSchema<typeof witnessParams>;
 export type WitnessReadyResponse = UnwrapSchema<typeof witnessReady>;
+export type SolanaWitnessParams = UnwrapSchema<typeof solanaWitnessParams>;
+export type SolanaWitnessReadyResponse = UnwrapSchema<typeof solanaWitnessReady>;

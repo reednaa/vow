@@ -1,6 +1,8 @@
 import { type Address, type Hex } from "viem";
 import { type RpcClient } from "./client.ts";
 import { encodeEvent, computeLeafHash, decodeEvent } from "../core/encoding.ts";
+import type { SolanaRpcClient } from "./solana-client.ts";
+import { extractEmitCpiEvents } from "./solana-client.ts";
 
 export type ConsistentBlockResult = {
   blockHash: Hex;
@@ -13,6 +15,22 @@ export type ConsistentBlockResult = {
     emitter: Address;
     topics: Hex[];
     data: Hex;
+  }>;
+};
+
+export type ConsistentSlotResult = {
+  blockhash: string;
+  slot: bigint;
+  latestSlot: bigint;
+  events: Array<{
+    eventIndex: number;
+    eventIndexLocal: number;
+    txSignature: string;
+    leafHash: Hex;
+    canonicalBytes: Uint8Array;
+    programId: Uint8Array;
+    discriminator: Uint8Array;
+    data: Uint8Array;
   }>;
 };
 
@@ -99,6 +117,128 @@ export async function fetchBlockConsistent(
     blockHash: blocks[0]!.hash,
     blockNumber,
     latestBlock,
+    events,
+  };
+}
+
+const MAX_SOLANA_RETRIES = 2;
+const SOLANA_RETRY_DELAY_MS = 3000;
+
+export async function fetchSolanaSlotConsistent(
+  rpcs: SolanaRpcClient[],
+  slot: bigint,
+): Promise<ConsistentSlotResult> {
+  if (rpcs.length === 0) throw new Error("No RPC clients provided");
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_SOLANA_RETRIES; attempt++) {
+    if (attempt > 0) {
+      console.log(
+        `[fetchSolanaSlotConsistent] retry ${attempt}/${MAX_SOLANA_RETRIES} for slot ${slot}: ${lastError?.message}`,
+      );
+      await new Promise((r) => setTimeout(r, SOLANA_RETRY_DELAY_MS));
+    }
+
+    try {
+      const result = await tryFetchSolanaSlotConsistent(rpcs, slot);
+      return result;
+    } catch (err: any) {
+      lastError = err;
+      // Only retry on event mismatches. Blockhash mismatches are hard errors.
+      if (!err.message?.includes("Event")) throw err;
+    }
+  }
+
+  throw lastError!;
+}
+
+async function tryFetchSolanaSlotConsistent(
+  rpcs: SolanaRpcClient[],
+  slot: bigint,
+): Promise<ConsistentSlotResult> {
+  const blocks = await Promise.all(rpcs.map((rpc) => rpc.getBlock(slot)));
+
+  const hashes = blocks.map((b) => b.blockhash);
+  const referenceHash = hashes[0];
+  for (let i = 1; i < hashes.length; i++) {
+    if (hashes[i] !== referenceHash) {
+      throw new Error(
+        `Blockhash mismatch at slot ${slot}: RPC 0 returned ${hashes[0]}, RPC ${i} returned ${hashes[i]}`,
+      );
+    }
+  }
+
+  // Extract events from each RPC. Build sets keyed by
+  // (txSignature, eventIndexLocal) — transaction ordering within
+  // a slot is not guaranteed consistent across RPCs, but each
+  // transaction's internal event layout must match.
+  const allEvents = blocks.map((block) => extractEmitCpiEvents(block));
+
+  const referenceEvents = allEvents[0]!;
+
+  // Collect reference RPC events into a lookup map
+  const refMap = new Map<string, typeof referenceEvents[number]>();
+  for (const e of referenceEvents) {
+    const key = `${e.txSignature}:${e.eventIndexLocal}`;
+    refMap.set(key, e);
+  }
+
+  // Compare each other RPC against the reference set
+  for (let i = 1; i < allEvents.length; i++) {
+    const otherEvents = allEvents[i]!;
+    if (otherEvents.length !== referenceEvents.length) {
+      throw new Error(
+        `Event count mismatch at slot ${slot}: RPC 0 has ${referenceEvents.length} events, RPC ${i} has ${otherEvents.length}`,
+      );
+    }
+
+    for (const e of otherEvents) {
+      const key = `${e.txSignature}:${e.eventIndexLocal}`;
+      const ref = refMap.get(key);
+      if (!ref) {
+        throw new Error(
+          `Event mismatch at slot ${slot}: RPC ${i} has event (tx=${e.txSignature}, local=${e.eventIndexLocal}) not present in RPC 0`,
+        );
+      }
+      if (ref.leafHash !== e.leafHash) {
+        throw new Error(
+          `Event mismatch at slot ${slot} tx=${e.txSignature} local=${e.eventIndexLocal}: leafHash RPC 0=${ref.leafHash}, RPC ${i}=${e.leafHash}`,
+        );
+      }
+    }
+  }
+
+  // Sort by (txSignature, eventIndexLocal) for a deterministic
+  // global ordering that doesn't depend on block tx ordering.
+  const sorted = [...referenceEvents].sort((a, b) => {
+    const cmp = a.txSignature.localeCompare(b.txSignature);
+    if (cmp !== 0) return cmp;
+    return a.eventIndexLocal - b.eventIndexLocal;
+  });
+
+  // Assign fresh global eventIndex values
+  const events = sorted.map((e, idx) => ({
+    eventIndex: idx,
+    eventIndexLocal: e.eventIndexLocal,
+    txSignature: e.txSignature,
+    leafHash: e.leafHash,
+    canonicalBytes: e.canonicalBytes,
+    programId: e.programId,
+    discriminator: e.discriminator,
+    data: e.data,
+  }));
+
+  const headSlots = await Promise.all(rpcs.map((rpc) => rpc.getSlot()));
+  const latestSlot = headSlots.reduce(
+    (max, s) => (s > max ? s : max),
+    headSlots[0]!,
+  );
+
+  return {
+    blockhash: referenceHash!,
+    slot,
+    latestSlot,
     events,
   };
 }

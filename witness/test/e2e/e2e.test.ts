@@ -23,13 +23,14 @@ import { mountWitnessHandler } from "../../src/api/witness.handler";
 import { encodeEvent, computeLeafHash } from "../../src/core/encoding";
 import { verifyProof } from "../../src/core/merkle";
 import { createEnvSigner, computeVowDigest } from "../../src/core/signing";
+import { caip2ToNumericChainId } from "../../src/core/chain-utils";
 import { encodeVow } from "../../src/client/index";
 import { startAnvil, stopAnvil, TEST_RPC_URL, TEST_CHAIN_ID } from "./harness";
 
 // ── constants ────────────────────────────────────────────────────────────────
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
-const CAIP2 = `eip155:${TEST_CHAIN_ID}`;
+const TEST_CHAIN_ID_NUMERIC = 31337;
 const API_PORT = 13004;
 
 const ANVIL_PRIVATE_KEY =
@@ -77,7 +78,7 @@ const mockVowLibAbi = [
 
 async function pollForIndexedBlock(
   db: ReturnType<typeof createDb>,
-  chainId: number,
+  chainId: string,
   blockNumber: bigint,
   timeoutMs = 20_000
 ) {
@@ -116,7 +117,7 @@ let eventLogIndex: number;
 const BASE_URL = `http://localhost:${API_PORT}`;
 
 const anvilChain = defineChain({
-  id: TEST_CHAIN_ID,
+  id: TEST_CHAIN_ID_NUMERIC,
   name: "Anvil",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [TEST_RPC_URL] } },
@@ -170,7 +171,7 @@ beforeAll(async () => {
   await db.delete(rpcs).where(eq(rpcs.chainId, TEST_CHAIN_ID));
   await db.delete(chains).where(eq(chains.chainId, TEST_CHAIN_ID));
 
-  await db.insert(chains).values({ chainId: TEST_CHAIN_ID, caip2: CAIP2 });
+  await db.insert(chains).values({ chainId: TEST_CHAIN_ID });
   // Two RPC rows required by index-block task (both pointing to the same local anvil)
   await db.insert(rpcs).values([
     { chainId: TEST_CHAIN_ID, url: TEST_RPC_URL },
@@ -206,7 +207,7 @@ afterAll(async () => {
 describe("E2E: anvil → witness → on-chain processVow", () => {
   it("first GET returns pending and enqueues a job", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(eventBlockNumber)}/${eventLogIndex}`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(eventBlockNumber)}/${eventLogIndex}`
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
@@ -219,7 +220,7 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
 
   it("returns ready with valid Merkle proof and recoverable signature", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(eventBlockNumber)}/${eventLogIndex}`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(eventBlockNumber)}/${eventLogIndex}`
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
@@ -240,7 +241,7 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
 
     // Verify signature recovers to Anvil key #0
     const digest = computeVowDigest({
-      chainId: BigInt(TEST_CHAIN_ID),
+      chainId: caip2ToNumericChainId(TEST_CHAIN_ID),
       rootBlockNumber: BigInt(witness.rootBlockNumber),
       root: witness.root as Hex,
     });
@@ -254,7 +255,7 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
 
   it("on-chain processVow accepts the encoded vow and returns original event data", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(eventBlockNumber)}/${eventLogIndex}`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(eventBlockNumber)}/${eventLogIndex}`
     );
     const body = (await res.json()) as any;
     const { witness } = body;
@@ -262,7 +263,7 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
     const vowHex = encodeVow([
       {
         witness: {
-          chainId: TEST_CHAIN_ID,
+          chainId: witness.chainId as string,
           rootBlockNumber: witness.rootBlockNumber,
           proof: witness.proof as Hex[],
           signature: witness.signature as Hex,
@@ -290,7 +291,7 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
 
     const [retChainId, , retEmitter, retTopics, retData] = result;
 
-    expect(Number(retChainId)).toBe(TEST_CHAIN_ID);
+    expect(retChainId).toBe(caip2ToNumericChainId(TEST_CHAIN_ID));
     expect(retEmitter.toLowerCase()).toBe(
       (witness.event.emitter as string).toLowerCase()
     );
@@ -305,7 +306,7 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
 
   it("returns 404 for a non-existent logIndex in the indexed block", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(eventBlockNumber)}/9999`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(eventBlockNumber)}/9999`
     );
     expect(res.status).toBe(404);
   });

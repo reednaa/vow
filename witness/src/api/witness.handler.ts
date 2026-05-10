@@ -10,12 +10,11 @@ import { chains, indexedBlocks, indexedEvents } from "../db/schema.ts";
 import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeEvent } from "../core/encoding.ts";
 import { computeVowDigest } from "../core/signing.ts";
+import { caip2ToNumericChainId } from "../core/chain-utils.ts";
 import { INDEX_BLOCK_TASK } from "../worker/index-block.task.ts";
 import { witnessParams, witnessResponse } from "./model.ts";
 
 export type AddJobFn = (identifier: string, payload?: any, spec?: any) => Promise<any>;
-
-const CAIP2_RE = /^eip155:(\d+)$/;
 
 export function createWitnessController(
   db: any,
@@ -26,7 +25,7 @@ export function createWitnessController(
     "/witness/:caip2ChainId/:blockNumber/:logIndex",
     async ({ params, set }) => {
       const { caip2ChainId, blockNumber, logIndex } = params;
-      const chainId = parseInt(CAIP2_RE.exec(caip2ChainId)![1]!, 10);
+      const chainId = caip2ChainId;
       const blockNumberBigInt = BigInt(blockNumber);
 
       // Check chain exists
@@ -99,7 +98,7 @@ export function createWitnessController(
             : signature;
           signatureSigner = await recoverAddress({
             hash: computeVowDigest({
-              chainId: BigInt(chainId),
+              chainId: caip2ToNumericChainId(chainId),
               rootBlockNumber: blockNumberBigInt,
               root: block.merkleRoot as Hex,
             }),
@@ -139,7 +138,7 @@ export function createWitnessController(
         const jobRows = await db.execute(
           sql`SELECT id, locked_at, attempts, max_attempts FROM graphile_worker.jobs WHERE key = ${jobKey} LIMIT 1`
         );
-        job = jobRows.rows?.[0] ?? jobRows[0] ?? null;
+        job = jobRows[0] ?? null;
       } catch {
         // graphile_worker schema not yet installed; treat as no job
       }

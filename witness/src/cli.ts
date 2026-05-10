@@ -5,7 +5,7 @@ import { fetchAndEncodeVow, type WitnessEndpoint } from "./client/index.ts";
 const USAGE = `Usage:
   vow-witness fetch-and-encode \\
     --endpoint <signerIndex>@<url> [--endpoint ...] \\
-    --chain <caip2ChainId> \\
+    --chain <chainId> \\
     --block <blockNumber> \\
     --log-index <logIndex> \\
     [--poll-interval <ms>] \\

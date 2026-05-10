@@ -5,7 +5,7 @@
 
   export let params: { id: string } = { id: "" };
 
-  const chainId = parseInt(params.id, 10);
+  const chainId: string = params.id;
 
   let chain: Chain | null = null;
   let rpcs: Rpc[] = [];
@@ -93,9 +93,6 @@
       ← Back
     </button>
     Chain {chainId}
-    {#if chain}
-      <span class="mono" style="font-size:13px;color:var(--text-muted);">{chain.caip2}</span>
-    {/if}
   </div>
 
   {#if error}

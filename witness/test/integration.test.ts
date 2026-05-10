@@ -16,11 +16,11 @@ import { createWitnessController } from "../src/api/witness.handler";
 import { encodeEvent, computeLeafHash } from "../src/core/encoding";
 import { buildMerkleTree, verifyProof } from "../src/core/merkle";
 import { createEnvSigner, computeVowDigest } from "../src/core/signing";
+import { caip2ToNumericChainId } from "../src/core/chain-utils";
 import { type ConsistentBlockResult } from "../src/rpc/consistency";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
-const TEST_CHAIN_ID = 99993;
-const CAIP2 = `eip155:${TEST_CHAIN_ID}`;
+const TEST_CHAIN_ID = "eip155:99993";
 const API_PORT = 13003;
 
 const BLOCK_NUMBER = 100n;
@@ -104,7 +104,7 @@ beforeAll(async () => {
   await db.delete(chains).where(eq(chains.chainId, TEST_CHAIN_ID));
 
   // Seed chain + RPCs
-  await db.insert(chains).values({ chainId: TEST_CHAIN_ID, caip2: CAIP2 });
+  await db.insert(chains).values({ chainId: TEST_CHAIN_ID });
   await db.insert(rpcs).values([
     { chainId: TEST_CHAIN_ID, url: "http://mock-rpc1.test" },
     { chainId: TEST_CHAIN_ID, url: "http://mock-rpc2.test" },
@@ -139,7 +139,7 @@ afterAll(async () => {
 });
 
 async function pollForIndexedBlock(
-  chainId: number,
+  chainId: string,
   blockNumber: bigint,
   timeoutMs = 15_000
 ) {
@@ -165,7 +165,7 @@ async function pollForIndexedBlock(
 describe("Integration: request → job → index → proof", () => {
   it("first GET returns pending and enqueues a job", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(BLOCK_NUMBER)}/0`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(BLOCK_NUMBER)}/0`
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
@@ -178,7 +178,7 @@ describe("Integration: request → job → index → proof", () => {
 
   it("returns ready with full witness for logIndex 0", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(BLOCK_NUMBER)}/0`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(BLOCK_NUMBER)}/0`
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
@@ -211,7 +211,7 @@ describe("Integration: request → job → index → proof", () => {
 
     // Verify signature recovers to the Anvil key #0 address
     const digest = computeVowDigest({
-      chainId: BigInt(TEST_CHAIN_ID),
+      chainId: caip2ToNumericChainId(TEST_CHAIN_ID),
       rootBlockNumber: BLOCK_NUMBER,
       root: body.witness.root as Hex,
     });
@@ -226,14 +226,14 @@ describe("Integration: request → job → index → proof", () => {
 
   it("returns 404 for logIndex 999 (not in block)", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(BLOCK_NUMBER)}/999`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(BLOCK_NUMBER)}/999`
     );
     expect(res.status).toBe(404);
   });
 
   it("returns ready for logIndex 1 in the same block", async () => {
     const res = await fetch(
-      `${BASE_URL}/witness/${CAIP2}/${Number(BLOCK_NUMBER)}/1`
+      `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(BLOCK_NUMBER)}/1`
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;

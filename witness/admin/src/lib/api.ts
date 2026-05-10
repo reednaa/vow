@@ -1,6 +1,5 @@
 export interface Chain {
-  chainId: number;
-  caip2: string;
+  chainId: string;
   latestBlock: string | null;
   updatedAt: string;
   rpcCount: number;
@@ -8,7 +7,7 @@ export interface Chain {
 
 export interface Rpc {
   id: number;
-  chainId: number;
+  chainId: string;
   url: string;
 }
 
@@ -81,20 +80,20 @@ export const api = {
   getStats: () => req<Stats>("/admin/api/stats"),
 
   getChains: () => req<Chain[]>("/admin/api/chains"),
-  addChain: (chainId: number, caip2: string) =>
-    req("/admin/api/chains", { method: "POST", body: JSON.stringify({ chainId, caip2 }) }),
-  deleteChain: (chainId: number) =>
+  addChain: (chainId: string) =>
+    req("/admin/api/chains", { method: "POST", body: JSON.stringify({ chainId }) }),
+  deleteChain: (chainId: string) =>
     req(`/admin/api/chains/${chainId}`, { method: "DELETE" }),
 
-  getRpcs: (chainId: number) => req<Rpc[]>(`/admin/api/chains/${chainId}/rpcs`),
-  addRpc: (chainId: number, url: string) =>
+  getRpcs: (chainId: string) => req<Rpc[]>(`/admin/api/chains/${chainId}/rpcs`),
+  addRpc: (chainId: string, url: string) =>
     req(`/admin/api/chains/${chainId}/rpcs`, {
       method: "POST",
       body: JSON.stringify({ url }),
     }),
   deleteRpc: (id: number) => req(`/admin/api/rpcs/${id}`, { method: "DELETE" }),
 
-  getBlocks: (chainId: number) => req<Block[]>(`/admin/api/chains/${chainId}/blocks`),
+  getBlocks: (chainId: string) => req<Block[]>(`/admin/api/chains/${chainId}/blocks`),
 
   getJobs: () => req<Job[]>("/admin/api/jobs"),
 };

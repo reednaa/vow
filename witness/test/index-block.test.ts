@@ -12,11 +12,12 @@ import { createDb, closeDb } from "../src/db/client";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../src/db/schema";
 import { createIndexBlockTask } from "../src/worker/index-block.task";
 import { createEnvSigner, computeVowDigest } from "../src/core/signing";
+import { caip2ToNumericChainId } from "../src/core/chain-utils";
 import { buildMerkleTree, ZERO_HASH } from "../src/core/merkle";
 import { encodeEvent, computeLeafHash } from "../src/core/encoding";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
-const TEST_CHAIN_ID = 99991;
+const TEST_CHAIN_ID = "eip155:99991";
 const TEST_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const TEST_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
@@ -56,7 +57,6 @@ beforeAll(async () => {
   // Seed chain + rpcs
   await db.insert(chains).values({
     chainId: TEST_CHAIN_ID,
-    caip2: `eip155:${TEST_CHAIN_ID}`,
   });
   await db.insert(rpcs).values([
     { chainId: TEST_CHAIN_ID, url: "http://rpc1.test" },
@@ -123,7 +123,7 @@ describe("index-block task", () => {
 
     // Verify signature recovers to signer address
     const digest = computeVowDigest({
-      chainId: BigInt(TEST_CHAIN_ID),
+      chainId: caip2ToNumericChainId(TEST_CHAIN_ID),
       rootBlockNumber: BigInt(blockNumber),
       root: expectedRoot,
     });
