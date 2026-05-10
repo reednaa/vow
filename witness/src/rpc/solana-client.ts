@@ -120,6 +120,7 @@ export function extractEmitCpiEvents(block: SolanaBlock): SolanaEvent[] {
   for (const tx of block.transactions) {
     const sigs = tx.transaction?.signatures;
     const txSignature = sigs && sigs.length > 0 ? sigs[0]! : "";
+    let localIndex = 0;
 
     const message = tx.transaction?.message;
     if (!message) continue;
@@ -148,7 +149,6 @@ export function extractEmitCpiEvents(block: SolanaBlock): SolanaEvent[] {
       const group = innerIxGroups.find((g) => g.index === ixIdx);
       if (!group) continue;
 
-      let localIndex = 0;
       for (const innerIx of group.instructions) {
         const innerProgram =
           innerIx.programIdIndex != null

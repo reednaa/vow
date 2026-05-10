@@ -1,8 +1,11 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import * as graphileWorkerSchema from "./graphile-worker";
 
-export type Db = ReturnType<typeof drizzle<typeof schema>>;
+const appSchema = { ...schema, ...graphileWorkerSchema };
+
+export type Db = ReturnType<typeof drizzle<typeof appSchema>>;
 
 let _db: Db | null = null;
 let _client: ReturnType<typeof postgres> | null = null;
@@ -10,7 +13,7 @@ let _client: ReturnType<typeof postgres> | null = null;
 export function createDb(url: string) {
   if (_client) throw new Error("DB already initialized — call closeDb first");
   _client = postgres(url);
-  _db = drizzle(_client, { schema });
+  _db = drizzle(_client, { schema: appSchema });
   return _db;
 }
 

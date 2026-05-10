@@ -7,7 +7,7 @@ import { createSolanaRpcClient, extractEmitCpiEvents } from "../src/rpc/solana-c
 import { isEmitCpi, extractEmitCpiEncoding, decodeSolanaEvent } from "../src/core/solana-encoding.ts";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://vow:vow@localhost:5433/vow_witness";
-const CHAIN_ID = 2;
+const CHAIN_ID = process.env.CHAIN_ID || "solana:mainnet";
 const SLOT = 418777600n;
 const FAILING_TX = "4TmHb6vpR5Lqt4NFYUZcmhVX213pTzkguG5MaH6zpdvDXwGxHEJr5GD3811j2C1rHBiugUwSCE7Hske13NoeXyAS";
 

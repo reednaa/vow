@@ -7,7 +7,7 @@ import { createSolanaRpcClient, extractEmitCpiEvents } from "../src/rpc/solana-c
 import { isEmitCpi, extractEmitCpiEncoding, decodeSolanaEvent } from "../src/core/solana-encoding.ts";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://vow:vow@localhost:5433/vow_witness";
-const CHAIN_ID = 2;
+const CHAIN_ID = process.env.CHAIN_ID || "solana:mainnet";
 const SLOT = 418695462n;
 const TX_SIGNATURE = "qZwgDVogHuQffKzXsoy5cajJwRt3jJe9qEDBn6Bj1QhjeaXruRh9V6ujeDVPigwtDhNYfSV5n9bqkT1JgyPPo35";
 

@@ -1,12 +1,11 @@
 import { toHex } from "viem";
-import { sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createDb } from "../src/db/client.ts";
-import { rpcs as rpcTable } from "../src/db/schema.ts";
-import { eq } from "drizzle-orm";
+import { rpcs as rpcTable, solanaIndexedEvents } from "../src/db/schema.ts";
 import { createSolanaRpcClient, extractEmitCpiEvents } from "../src/rpc/solana-client.ts";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://vow:vow@localhost:5433/vow_witness";
-const CHAIN_ID = 2;
+const CHAIN_ID = process.env.CHAIN_ID || "solana:mainnet";
 const TX_SIGNATURE = "4A6i2xxoDzF7vvEzfcVeDoHW4NJSAAbYAQvapmgDL6VzX6cHGvUbkqnvZW8ko4XRgZghu3ydJ56fgdn9rGTpiwCZ";
 const EVENT_LOCAL = 0;
 
@@ -99,14 +98,21 @@ async function main() {
 
   // 5. Check if it's already in the DB
   console.log("\n=== Step 5: Check DB ===");
-  const existingRows = await db.execute(
-    sql`SELECT slot, event_index, leaf_hash, created_at
-        FROM solana_indexed_events
-        WHERE chain_id = ${CHAIN_ID}
-          AND tx_signature = ${TX_SIGNATURE}
-          AND event_index_local = ${EVENT_LOCAL}`,
-  );
-  const existing = existingRows[0] ?? null;
+  const [existing] = await db
+    .select({
+      slot: solanaIndexedEvents.slot,
+      eventIndex: solanaIndexedEvents.eventIndex,
+      leafHash: solanaIndexedEvents.leafHash,
+    })
+    .from(solanaIndexedEvents)
+    .where(
+      and(
+        eq(solanaIndexedEvents.chainId, CHAIN_ID),
+        eq(solanaIndexedEvents.txSignature, TX_SIGNATURE),
+        eq(solanaIndexedEvents.eventIndexLocal, EVENT_LOCAL),
+      ),
+    )
+    .limit(1);
   if (existing) {
     console.log("  Already indexed:", existing);
   } else {

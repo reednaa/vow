@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   compactSignatureToSignature,
   type Hex,
@@ -7,6 +7,8 @@ import {
   recoverAddress,
 } from "viem";
 import { chains, indexedBlocks, indexedEvents } from "../db/schema.ts";
+import { graphileWorkerPrivateJobs } from "../db/graphile-worker.ts";
+import type { Db } from "../db/client.ts";
 import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeEvent } from "../core/encoding.ts";
 import { computeVowDigest } from "../core/signing.ts";
@@ -17,7 +19,7 @@ import { witnessParams, witnessResponse } from "./model.ts";
 export type AddJobFn = (identifier: string, payload?: any, spec?: any) => Promise<any>;
 
 export function createWitnessController(
-  db: any,
+  db: Db,
   addJob: AddJobFn,
   witnessSigner: string = "0x0000000000000000000000000000000000000000"
 ) {
@@ -133,21 +135,35 @@ export function createWitnessController(
 
       // Block not indexed — check for existing Graphile job
       const jobKey = `index:${chainId}:${blockNumber}`;
-      let job: any = null;
+      let job:
+        | {
+            id: bigint;
+            lockedAt: Date | null;
+            attempts: number;
+            maxAttempts: number;
+          }
+        | null = null;
       try {
-        const jobRows = await db.execute(
-          sql`SELECT id, locked_at, attempts, max_attempts FROM graphile_worker.jobs WHERE key = ${jobKey} LIMIT 1`
-        );
-        job = jobRows[0] ?? null;
+        const [selectedJob] = await db
+          .select({
+            id: graphileWorkerPrivateJobs.id,
+            lockedAt: graphileWorkerPrivateJobs.lockedAt,
+            attempts: graphileWorkerPrivateJobs.attempts,
+            maxAttempts: graphileWorkerPrivateJobs.maxAttempts,
+          })
+          .from(graphileWorkerPrivateJobs)
+          .where(eq(graphileWorkerPrivateJobs.key, jobKey))
+          .limit(1);
+        job = selectedJob ?? null;
       } catch {
         // graphile_worker schema not yet installed; treat as no job
       }
 
       if (job) {
-        if (job.locked_at) {
+        if (job.lockedAt) {
           return { status: "indexing" as const };
         }
-        if (job.attempts >= job.max_attempts) {
+        if (job.attempts >= job.maxAttempts) {
           return { status: "failed" as const, error: "Block indexing failed after max retries" };
         }
         return { status: "pending" as const };
@@ -167,7 +183,7 @@ type AppWithUse = { use: (plugin: WitnessController) => unknown };
 
 export function mountWitnessHandler<TApp extends AppWithUse>(
   app: TApp,
-  db: any,
+  db: Db,
   addJob: AddJobFn,
   witnessSigner: string
 ) {

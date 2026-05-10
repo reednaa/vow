@@ -20,7 +20,7 @@ const DATABASE_URL =
   process.env.DATABASE_URL ||
   "postgresql://vow:vow@localhost:5433/vow_witness";
 
-const CHAIN_ID = 2;
+const CHAIN_ID = process.env.CHAIN_ID || "solana:mainnet";
 const SLOT = 418695462n;
 const TX_SIGNATURE =
   "3RCdw4WDfpn53o9bDjXRyPpgSFeZL1mHvjSogAbg6hGidUVrL4JuMXQptPj4eTnJGQEXJPXsyCFuyBRSa5H7AVSc";

@@ -3,6 +3,11 @@ import { jwt } from "@elysiajs/jwt";
 import { eq, count, desc, sql } from "drizzle-orm";
 import { createPublicClient, http } from "viem";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../../db/schema.ts";
+import {
+  graphileWorkerPrivateJobs,
+  graphileWorkerPrivateTasks,
+} from "../../db/graphile-worker.ts";
+import type { Db } from "../../db/client.ts";
 
 async function validateRpc(
   url: string
@@ -16,7 +21,7 @@ async function validateRpc(
   }
 }
 
-export function createAdminApiPlugin(db: any, jwtSecret: string) {
+export function createAdminApiPlugin(db: Db, jwtSecret: string) {
   return new Elysia({ prefix: "/admin/api" })
     .use(jwt({ name: "jwt", secret: jwtSecret }))
     .onBeforeHandle(async ({ jwt, cookie: { adminToken }, set, path }: any) => {
@@ -32,33 +37,42 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
 
     // ── Stats ─────────────────────────────────────────────────────────────────
     .get("/stats", async () => {
-      const [[chainCount], [rpcCount], [blockCount], [eventCount], jobStats] =
+      const [chainCounts, rpcCounts, blockCounts, eventCounts, jobStats] =
         await Promise.all([
           db.select({ count: count() }).from(chains),
           db.select({ count: count() }).from(rpcs),
           db.select({ count: count() }).from(indexedBlocks),
           db.select({ count: count() }).from(indexedEvents),
           db
-            .execute(
-              sql`SELECT
-                COUNT(*) FILTER (WHERE locked_at IS NULL AND attempts < max_attempts) AS pending,
-                COUNT(*) FILTER (WHERE locked_at IS NOT NULL) AS running,
-                COUNT(*) FILTER (WHERE attempts >= max_attempts) AS failed
-              FROM graphile_worker.jobs`
-            )
-            .catch(() => [{ pending: 0, running: 0, failed: 0 }]),
+            .select({
+              pending: sql<number>`count(*) filter (
+                where ${graphileWorkerPrivateJobs.lockedAt} is null
+                  and ${graphileWorkerPrivateJobs.attempts} < ${graphileWorkerPrivateJobs.maxAttempts}
+              )`,
+              running: sql<number>`count(*) filter (where ${graphileWorkerPrivateJobs.lockedAt} is not null)`,
+              failed: sql<number>`count(*) filter (
+                where ${graphileWorkerPrivateJobs.attempts} >= ${graphileWorkerPrivateJobs.maxAttempts}
+              )`,
+            })
+            .from(graphileWorkerPrivateJobs)
+            .then(([row]) => row ?? { pending: 0, running: 0, failed: 0 })
+            .catch(() => ({ pending: 0, running: 0, failed: 0 })),
         ]);
 
-      const jr = jobStats.rows?.[0] ?? jobStats[0] ?? {};
+      const chainCount = chainCounts[0]?.count ?? 0;
+      const rpcCount = rpcCounts[0]?.count ?? 0;
+      const blockCount = blockCounts[0]?.count ?? 0;
+      const eventCount = eventCounts[0]?.count ?? 0;
+
       return {
-        chains: Number(chainCount.count),
-        rpcs: Number(rpcCount.count),
-        indexedBlocks: Number(blockCount.count),
-        indexedEvents: Number(eventCount.count),
+        chains: Number(chainCount),
+        rpcs: Number(rpcCount),
+        indexedBlocks: Number(blockCount),
+        indexedEvents: Number(eventCount),
         jobs: {
-          pending: Number(jr.pending ?? 0),
-          running: Number(jr.running ?? 0),
-          failed: Number(jr.failed ?? 0),
+          pending: Number(jobStats.pending ?? 0),
+          running: Number(jobStats.running ?? 0),
+          failed: Number(jobStats.failed ?? 0),
         },
       };
     })
@@ -156,6 +170,9 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
           .insert(rpcs)
           .values({ chainId, url: body.url })
           .returning();
+        if (!row) {
+          throw new Error("RPC insert did not return a row");
+        }
         return { ok: true, id: row.id, blockNumber: validation.blockNumber };
       },
       { body: t.Object({ url: t.String({ minLength: 1 }) }) }
@@ -173,36 +190,37 @@ export function createAdminApiPlugin(db: any, jwtSecret: string) {
 
     // ── Jobs ──────────────────────────────────────────────────────────────────
     .get("/jobs", async () => {
-      const result = await db
-        .execute(
-          sql`SELECT
-            id, key, task_identifier, payload,
-            attempts, max_attempts, last_error,
-            locked_at, run_at, created_at,
-            CASE
-              WHEN locked_at IS NOT NULL THEN 'running'
-              WHEN attempts >= max_attempts THEN 'failed'
-              WHEN run_at > NOW() THEN 'scheduled'
-              ELSE 'pending'
-            END AS status
-          FROM graphile_worker.jobs
-          ORDER BY created_at DESC
-          LIMIT 100`
+      const jobs = await db
+        .select({
+          id: graphileWorkerPrivateJobs.id,
+          key: graphileWorkerPrivateJobs.key,
+          task: graphileWorkerPrivateTasks.identifier,
+          payload: graphileWorkerPrivateJobs.payload,
+          attempts: graphileWorkerPrivateJobs.attempts,
+          maxAttempts: graphileWorkerPrivateJobs.maxAttempts,
+          lastError: graphileWorkerPrivateJobs.lastError,
+          lockedAt: graphileWorkerPrivateJobs.lockedAt,
+          runAt: graphileWorkerPrivateJobs.runAt,
+          createdAt: graphileWorkerPrivateJobs.createdAt,
+          status: sql<"running" | "failed" | "scheduled" | "pending">`case
+            when ${graphileWorkerPrivateJobs.lockedAt} is not null then 'running'
+            when ${graphileWorkerPrivateJobs.attempts} >= ${graphileWorkerPrivateJobs.maxAttempts} then 'failed'
+            when ${graphileWorkerPrivateJobs.runAt} > now() then 'scheduled'
+            else 'pending'
+          end`,
+        })
+        .from(graphileWorkerPrivateJobs)
+        .innerJoin(
+          graphileWorkerPrivateTasks,
+          eq(graphileWorkerPrivateTasks.id, graphileWorkerPrivateJobs.taskId),
         )
-        .catch(() => ({ rows: [] }));
+        .orderBy(desc(graphileWorkerPrivateJobs.createdAt))
+        .limit(100)
+        .catch(() => []);
 
-      return (result.rows ?? result).map((j: any) => ({
-        id: String(j.id),
-        key: j.key,
-        task: j.task_identifier,
-        payload: j.payload,
-        attempts: j.attempts,
-        maxAttempts: j.max_attempts,
-        lastError: j.last_error,
-        lockedAt: j.locked_at,
-        runAt: j.run_at,
-        createdAt: j.created_at,
-        status: j.status,
+      return jobs.map((job) => ({
+        ...job,
+        id: String(job.id),
       }));
     })
 
