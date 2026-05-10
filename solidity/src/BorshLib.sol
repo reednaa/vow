@@ -72,44 +72,46 @@ library BorshLib {
         }
     }
 
+    /// @dev inspired by Solady LibBit.reverseBytes
     function readU64(
         bytes calldata data,
         uint256 offset
     ) internal pure returns (uint64 value, uint256 newOffset) {
         assembly ("memory-safe") {
             let word := calldataload(add(data.offset, offset))
-            value := or(byte(0, word), shl(8, byte(1, word)))
-            value := or(value, shl(16, byte(2, word)))
-            value := or(value, shl(24, byte(3, word)))
-            value := or(value, shl(32, byte(4, word)))
-            value := or(value, shl(40, byte(5, word)))
-            value := or(value, shl(48, byte(6, word)))
-            value := or(value, shl(56, byte(7, word)))
+            // Byte-reversal butterfly — on-the-fly mask computation.
+            let m0 := mul(0x100000000000000000000000000000001, shr(192, not(0)))
+            let m1 := xor(m0, shl(32, m0))
+            let m2 := xor(m1, shl(16, m1))
+            let m3 := xor(m2, shl(8, m2))
+            let r := or(and(shr(8, word), m3), shl(8, and(word, m3)))
+            r := or(and(shr(16, r), m2), shl(16, and(r, m2)))
+            r := or(and(shr(32, r), m1), shl(32, and(r, m1)))
+            // The reversed 8 bytes are at the top of the word — shift down.
+            value := shr(192, r)
             newOffset := add(offset, 8)
         }
     }
 
+    /// @dev inspired by Solady LibBit.reverseBytes
     function readU128(
         bytes calldata data,
         uint256 offset
     ) internal pure returns (uint128 value, uint256 newOffset) {
         assembly ("memory-safe") {
             let word := calldataload(add(data.offset, offset))
-            value := or(byte(0, word), shl(8, byte(1, word)))
-            value := or(value, shl(16, byte(2, word)))
-            value := or(value, shl(24, byte(3, word)))
-            value := or(value, shl(32, byte(4, word)))
-            value := or(value, shl(40, byte(5, word)))
-            value := or(value, shl(48, byte(6, word)))
-            value := or(value, shl(56, byte(7, word)))
-            value := or(value, shl(64, byte(8, word)))
-            value := or(value, shl(72, byte(9, word)))
-            value := or(value, shl(80, byte(10, word)))
-            value := or(value, shl(88, byte(11, word)))
-            value := or(value, shl(96, byte(12, word)))
-            value := or(value, shl(104, byte(13, word)))
-            value := or(value, shl(112, byte(14, word)))
-            value := or(value, shl(120, byte(15, word)))
+            // Byte-reversal butterfly with on-the-fly mask computation
+            // (inspired by Solady LibBit.reverseBytes — saves ~160 bytes vs hardcoded constants).
+            let m0 := mul(0x100000000000000000000000000000001, shr(192, not(0)))
+            let m1 := xor(m0, shl(32, m0))
+            let m2 := xor(m1, shl(16, m1))
+            let m3 := xor(m2, shl(8, m2))
+            let r := or(and(shr(8, word), m3), shl(8, and(word, m3)))
+            r := or(and(shr(16, r), m2), shl(16, and(r, m2)))
+            r := or(and(shr(32, r), m1), shl(32, and(r, m1)))
+            r := or(and(shr(64, r), m0), shl(64, and(r, m0)))
+            r := or(shr(128, r), shl(128, r))
+            value := r
             newOffset := add(offset, 16)
         }
     }
