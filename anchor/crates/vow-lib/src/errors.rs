@@ -6,10 +6,12 @@ pub enum VowError {
     InvalidlySignedRoot,
     #[msg("Too many topics (max 4)")]
     TooManyTopics,
+    #[msg("Invalid emit_cpi event encoding")]
+    InvalidEmitCpi,
     #[msg("Signer index cannot be zero")]
     Index0,
-    #[msg("No quorum: required {0}, got {1}")]
-    NoQuorum(u8, u8),
+    #[msg("No quorum")]
+    NoQuorum,
     #[msg("Signer index repeat")]
     SignerIndexRepeat,
     #[msg("Zero signer at lookup")]
@@ -18,4 +20,10 @@ pub enum VowError {
     InvalidSecp256k1Signature,
     #[msg("Vow payload too short")]
     VowTooShort,
+    #[msg("Borsh decode underflow")]
+    BorshUnderflow,
+    #[msg("Invalid UTF-8 string")]
+    InvalidUtf8,
+    #[msg("Mock return data exceeds Solana limits")]
+    ReturnDataTooLarge,
 }

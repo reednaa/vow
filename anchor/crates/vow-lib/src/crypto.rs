@@ -1,4 +1,3 @@
-use anchor_lang::prelude::*;
 use tiny_keccak::{Hasher, Keccak};
 
 pub fn keccak256(data: &[u8]) -> [u8; 32] {

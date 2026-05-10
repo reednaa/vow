@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "crates/vow-lib",
+    "programs/mock-vow-lib",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+anchor-lang = "0.30.1"
+solana-program = "=2.2.1"
+tiny-keccak = { version = "2.0", features = ["keccak"] }
+vow-lib = { path = "crates/vow-lib" }

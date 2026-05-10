@@ -7,6 +7,7 @@ The project is split into two parts:
 
 - [`/witness`](/witness): offchain witness service that indexes blocks, canonicalizes events, builds Merkle roots, signs roots, and serves proofs for individual events.
 - [`/solidity`](/solidity): onchain verification library and witness directory contracts that validate witness signatures plus Merkle proofs and returns decoded event data.
+- [`/anchor`](/anchor): Solana/Anchor mirror of the verification library pattern, with a reusable Rust crate and a deployable mock reference program.
 
 ## Project Goal
 

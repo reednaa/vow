@@ -1,10 +1,13 @@
 {
-  "name": "vow-solana",
+  "name": "vow-anchor",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test tests/**/*.ts"
+    "build": "anchor build",
+    "test": "bun test tests/**/*.ts",
+    "test:anchor": "anchor test",
+    "test:rust": "cargo test --manifest-path Cargo.toml"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.30.1",
