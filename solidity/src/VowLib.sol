@@ -156,13 +156,11 @@ library VowLib {
 
         evt.offset := sub(add(vow.offset, vow.length), E)
         evt.length := E
+
+        chainId := calldataload(vow.offset)
+        rootBlockNumber := calldataload(add(vow.offset, 32))
       }
       {
-
-        assembly ("memory-safe") {
-          chainId := calldataload(vow.offset)
-          rootBlockNumber := calldataload(add(vow.offset, 32))
-        }
         bytes32 ourLeaf = _leafHash(evt);
         bytes32[] calldata proof;
         assembly ("memory-safe") {
