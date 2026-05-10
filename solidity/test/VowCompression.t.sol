@@ -8,58 +8,72 @@ contract VowCompressionTest is Test {
   function test_vowCompressionMetrics() external view {
     bytes memory vow = _vow();
 
-    bytes memory cdCompressed = LibZip.cdCompress(vow);
-    uint256 cdDecompressStart = gasleft();
-    bytes memory cdRoundTrip = LibZip.cdDecompress(cdCompressed);
-    uint256 cdDecompressGas = cdDecompressStart - gasleft();
-    assertEq(cdRoundTrip, vow);
+    uint256 vowGas;
+    {
+      {
+        uint256 vowZeroBytes; uint256 vowNonZeroBytes;
+        (vowGas, vowZeroBytes, vowNonZeroBytes) = _calldataGas(vow);
 
-    bytes memory flzCompressed = LibZip.flzCompress(vow);
-    uint256 flzDecompressStart = gasleft();
-    bytes memory flzRoundTrip = LibZip.flzDecompress(flzCompressed);
-    uint256 flzDecompressGas = flzDecompressStart - gasleft();
-    assertEq(flzRoundTrip, vow);
+        console2.log("Vow bytes:", vow.length);
+        console2.log("Vow calldata gas:", vowGas);
+        console2.log("Vow zero bytes:", vowZeroBytes);
+        console2.log("Vow non-zero bytes:", vowNonZeroBytes);
+      }
 
-    (uint256 vowGas, uint256 vowZeroBytes, uint256 vowNonZeroBytes) = _calldataGas(vow);
-    (uint256 cdGas, uint256 cdZeroBytes, uint256 cdNonZeroBytes) = _calldataGas(cdCompressed);
-    (uint256 flzGas, uint256 flzZeroBytes, uint256 flzNonZeroBytes) = _calldataGas(flzCompressed);
+      {
+        bytes memory cdCompressed = LibZip.cdCompress(vow);
+        uint256 cdDecompressStart = gasleft();
+        bytes memory cdRoundTrip = LibZip.cdDecompress(cdCompressed);
+        uint256 cdDecompressGas = cdDecompressStart - gasleft();
+        assertEq(cdRoundTrip, vow);
+        (uint256 cdGas, uint256 cdZeroBytes, uint256 cdNonZeroBytes) = _calldataGas(cdCompressed);
 
-    console2.log("Vow bytes:", vow.length);
-    console2.log("Vow calldata gas:", vowGas);
-    console2.log("Vow zero bytes:", vowZeroBytes);
-    console2.log("Vow non-zero bytes:", vowNonZeroBytes);
+        console2.log("cdCompress bytes:", cdCompressed.length);
+        console2.log("cdCompress calldata gas:", cdGas);
+        console2.log("cdCompress zero bytes:", cdZeroBytes);
+        console2.log("cdCompress non-zero bytes:", cdNonZeroBytes);
 
-    console2.log("cdCompress bytes:", cdCompressed.length);
-    console2.log("cdCompress calldata gas:", cdGas);
-    console2.log("cdCompress zero bytes:", cdZeroBytes);
-    console2.log("cdCompress non-zero bytes:", cdNonZeroBytes);
-    if (cdCompressed.length <= vow.length) {
-      console2.log("cdCompress size saved:", vow.length - cdCompressed.length);
-    } else {
-      console2.log("cdCompress size overhead:", cdCompressed.length - vow.length);
+        if (cdCompressed.length <= vow.length) {
+          console2.log("cdCompress size saved:", vow.length - cdCompressed.length);
+        } else {
+          console2.log("cdCompress size overhead:", cdCompressed.length - vow.length);
+        }
+        if (cdGas <= vowGas) {
+          console2.log("cdCompress gas saved:", vowGas - cdGas);
+        } else {
+          console2.log("cdCompress gas overhead:", cdGas - vowGas);
+        }
+        console2.log("cdDecompress execution gas:", cdDecompressGas);
+      }
+
+      {
+         bytes memory flzCompressed = LibZip.flzCompress(vow);
+        uint256 flzDecompressStart = gasleft();
+        bytes memory flzRoundTrip = LibZip.flzDecompress(flzCompressed);
+        uint256 flzDecompressGas = flzDecompressStart - gasleft();
+        assertEq(flzRoundTrip, vow);
+        (uint256 flzGas, uint256 flzZeroBytes, uint256 flzNonZeroBytes) = _calldataGas(flzCompressed);
+
+        console2.log("flzCompress bytes:", flzCompressed.length);
+        console2.log("flzCompress calldata gas:", flzGas);
+        console2.log("flzCompress zero bytes:", flzZeroBytes);
+        console2.log("flzCompress non-zero bytes:", flzNonZeroBytes);
+        if (flzCompressed.length <= vow.length) {
+          console2.log("flzCompress size saved:", vow.length - flzCompressed.length);
+        } else {
+          console2.log("flzCompress size overhead:", flzCompressed.length - vow.length);
+        }
+        if (flzGas <= vowGas) {
+          console2.log("flzCompress gas saved:", vowGas - flzGas);
+        } else {
+          console2.log("flzCompress gas overhead:", flzGas - vowGas);
+        }
+        console2.log("flzDecompress execution gas:", flzDecompressGas);
+      }
     }
-    if (cdGas <= vowGas) {
-      console2.log("cdCompress gas saved:", vowGas - cdGas);
-    } else {
-      console2.log("cdCompress gas overhead:", cdGas - vowGas);
-    }
-    console2.log("cdDecompress execution gas:", cdDecompressGas);
 
-    console2.log("flzCompress bytes:", flzCompressed.length);
-    console2.log("flzCompress calldata gas:", flzGas);
-    console2.log("flzCompress zero bytes:", flzZeroBytes);
-    console2.log("flzCompress non-zero bytes:", flzNonZeroBytes);
-    if (flzCompressed.length <= vow.length) {
-      console2.log("flzCompress size saved:", vow.length - flzCompressed.length);
-    } else {
-      console2.log("flzCompress size overhead:", flzCompressed.length - vow.length);
-    }
-    if (flzGas <= vowGas) {
-      console2.log("flzCompress gas saved:", vowGas - flzGas);
-    } else {
-      console2.log("flzCompress gas overhead:", flzGas - vowGas);
-    }
-    console2.log("flzDecompress execution gas:", flzDecompressGas);
+
+    
   }
 
   function _calldataGas(

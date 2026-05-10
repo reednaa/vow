@@ -140,48 +140,57 @@ library VowLib {
     bytes calldata vow
   ) internal view returns (uint256 chainId, uint256 rootBlockNumber, bytes calldata evt) {
     // Load the header.
-    uint256 psize;
-    uint256 S;
-    uint256 E;
-    assembly ("memory-safe") {
-      let varLengths := calldataload(add(vow.offset, 64))
-      // Header descriptor at bytes [64..67]: P(1) | S(1) | E(2), big-endian.
-      psize := shl(5, byte(0, varLengths))
-      S := byte(1, varLengths)
-      E := or(shl(8, byte(2, varLengths)), byte(3, varLengths))
-
-      evt.offset := sub(add(vow.offset, vow.length), E)
-      evt.length := E
-    }
-    bytes32 ourLeaf = _leafHash(evt);
-    bytes32[] calldata proof;
-    assembly ("memory-safe") {
-      proof.offset := add(vow.offset, 68)
-      proof.length := div(psize, 32)
-    }
-    bytes32 root = computeMerkleRootCalldata(proof, ourLeaf);
-
-    assembly ("memory-safe") {
-      chainId := calldataload(vow.offset)
-      rootBlockNumber := calldataload(add(vow.offset, 32))
-    }
-    bytes32 digest = _hashTypedData(vowTypehash(chainId, rootBlockNumber, root));
-
-    // Step 2. Verify signatures.
-    // qourum validation is done by directory.
-    uint256 signerIndexies;
-    assembly ("memory-safe") {
-      // We need to clean
-      signerIndexies := shl(mul(sub(32, S), 8), shr(mul(sub(32, S), 8), calldataload(add(vow.offset, add(68, psize)))))
-    }
-    address[] memory signers = IWitnessDirectory(directory).getQourumSet(signerIndexies);
-
-    uint256 numSigners = signers.length;
-    bool valid = true;
+    bytes32 digest;
     uint256 counter;
-    assembly ("memory-safe") {
-      counter := add(add(68, psize), S)
+    uint256 numSigners;
+    address[] memory signers;
+    {
+      uint256 psize;
+      uint256 S;
+      assembly ("memory-safe") {
+        let varLengths := calldataload(add(vow.offset, 64))
+        // Header descriptor at bytes [64..67]: P(1) | S(1) | E(2), big-endian.
+        psize := shl(5, byte(0, varLengths))
+        S := byte(1, varLengths)
+        let E := or(shl(8, byte(2, varLengths)), byte(3, varLengths))
+
+        evt.offset := sub(add(vow.offset, vow.length), E)
+        evt.length := E
+      }
+      {
+
+        assembly ("memory-safe") {
+          chainId := calldataload(vow.offset)
+          rootBlockNumber := calldataload(add(vow.offset, 32))
+        }
+        bytes32 ourLeaf = _leafHash(evt);
+        bytes32[] calldata proof;
+        assembly ("memory-safe") {
+          proof.offset := add(vow.offset, 68)
+          proof.length := div(psize, 32)
+        }
+        bytes32 root = computeMerkleRootCalldata(proof, ourLeaf);
+        
+        digest = _hashTypedData(vowTypehash(chainId, rootBlockNumber, root));
+      }
+
+      // Step 2. Verify signatures.
+      // qourum validation is done by directory.
+      {
+        uint256 signerIndexies;
+        assembly ("memory-safe") {
+          // We need to clean
+          signerIndexies := shl(mul(sub(32, S), 8), shr(mul(sub(32, S), 8), calldataload(add(vow.offset, add(68, psize)))))
+        }
+        signers = IWitnessDirectory(directory).getQourumSet(signerIndexies);
+      }
+
+      numSigners = signers.length;
+      assembly ("memory-safe") {
+        counter := add(add(68, psize), S)
+      }
     }
+    bool valid = true;
     for (uint256 i = 0; i < numSigners; ++i) {
       bytes calldata signature;
       assembly ("memory-safe") {

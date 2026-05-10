@@ -375,41 +375,44 @@ contract VowLibFindingsTest is Test {
     directory.setSigner(secondSigner, 2, 1);
   }
 
-  // Finding: processVow does not parse P/S/E from the documented header fields.
-  function test_processVow_accepts_spec_valid_payload() external {
-    uint256 chainId = 10;
-    uint256 rootBlockNumber = 490;
+  uint256 constant CHAIN_ID_TEST = 10;
+  uint256 constant ROOT_BLOCK_NUMBER_TEST = 490;
 
+  // Finding: processVow does not parse P/S/E from the documented header fields.
+  function test_processVow_accepts_spec_valid_payload() external view {
     bytes32[] memory topics = new bytes32[](2);
     topics[0] = keccak256("Topic0");
     topics[1] = keccak256("Topic1");
-    bytes memory eventData = abi.encode(uint256(123), address(0xABCD));
-    bytes memory evt = v.referenceEvent(address(0xBEEF), topics, eventData);
+    bytes memory evt = v.referenceEvent(address(0xBEEF), topics, abi.encode(uint256(123), address(0xABCD)));
+    bytes memory vow;
 
-    bytes32[] memory proof = new bytes32[](1);
-    proof[0] = bytes32(0);
-    bytes32 leaf = v.leafHash(evt);
-    bytes32 root = v.computeMerkleRootCalldata(proof, leaf);
+    {
+        bytes32[] memory proof = new bytes32[](1);
+        bytes32 leaf = v.leafHash(evt);
+        bytes32 root = v.computeMerkleRootCalldata(proof, leaf);
 
-    bytes32 digest = v.hashTypedData(v.vowTypehash(chainId, rootBlockNumber, root));
-    (uint8 vv, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
-    bytes[] memory signatures = new bytes[](1);
-    signatures[0] = abi.encodePacked(r, s, vv);
-    uint8[] memory signerIndices = new uint8[](1);
-    signerIndices[0] = 1;
+        bytes[] memory signatures = new bytes[](1);
+        uint8[] memory signerIndices = new uint8[](1);
+        signerIndices[0] = 1;
+        bytes32 digest = v.hashTypedData(v.vowTypehash(CHAIN_ID_TEST, ROOT_BLOCK_NUMBER_TEST, root));
+        {
+          (uint8 vv, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
+          signatures[0] = abi.encodePacked(r, s, vv);
+        }
 
-    bytes memory vow = v.encodeVowExternal(chainId, rootBlockNumber, proof, signerIndices, signatures, evt);
+        vow = v.encodeVowExternal(CHAIN_ID_TEST, ROOT_BLOCK_NUMBER_TEST, proof, signerIndices, signatures, evt);
+    }
 
     (uint256 gotChainId, uint256 gotRootBlockNumber, bytes memory gotEvt) = v.processVow(address(directory), vow);
-
+    assertEq(gotChainId, CHAIN_ID_TEST);
+    assertEq(gotRootBlockNumber, ROOT_BLOCK_NUMBER_TEST);
+    assertEq(gotEvt, evt);
+    
     (address emitter, bytes32[] memory gotTopics, bytes memory gotData) = v.decodeEvent(gotEvt);
 
-    assertEq(gotChainId, chainId);
-    assertEq(gotRootBlockNumber, rootBlockNumber);
-    assertEq(gotEvt, evt);
     assertEq(emitter, address(0xBEEF));
     assertEq(gotTopics, topics);
-    assertEq(gotData, eventData);
+    assertEq(gotData, abi.encode(uint256(123), address(0xABCD)));
   }
 
   // Finding: decodeEvent accepts topic counts above 4.
