@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { readFileSync } from "fs";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   compactSignatureToSignature,
   type Address,
+  type Abi,
   type Hex,
   createPublicClient,
   createWalletClient,
@@ -32,6 +33,7 @@ import { startAnvil, stopAnvil, TEST_RPC_URL, TEST_CHAIN_ID } from "./harness";
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const TEST_CHAIN_ID_NUMERIC = 31337;
 const API_PORT = 13004;
+const WORKER_SCHEMA = `graphile_worker_e2e_${Date.now().toString(36)}`;
 
 const ANVIL_PRIVATE_KEY =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as Hex;
@@ -113,6 +115,17 @@ type Addresses = {
   testEmitter: Address;
 };
 
+type FoundryArtifact = {
+  abi: Abi;
+  bytecode: { object: Hex };
+};
+
+function loadArtifact(path: string): FoundryArtifact {
+  return JSON.parse(
+    readFileSync(new URL(`../../../solidity/out/${path}`, import.meta.url).pathname, "utf-8")
+  ) as FoundryArtifact;
+}
+
 let addresses: Addresses;
 let db: ReturnType<typeof createDb>;
 let worker: Awaited<ReturnType<typeof setupWorker>>;
@@ -133,16 +146,13 @@ const anvilChain = defineChain({
 });
 
 const account = privateKeyToAccount(ANVIL_PRIVATE_KEY);
+const witnessDirectoryArtifact = loadArtifact("WitnessDirectory.sol/WitnessDirectory.json");
+const mockVowLibArtifact = loadArtifact("MockVowLib.sol/MockVowLib.json");
+const testEmitterArtifact = loadArtifact("TestEmitter.sol/TestEmitter.json");
 
 // ── setup / teardown ──────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  // Load deployed contract addresses
-  addresses = JSON.parse(
-    readFileSync(new URL("./addresses.json", import.meta.url).pathname, "utf-8")
-  ) as Addresses;
-
-  // Start anvil with pre-deployed state
   await startAnvil();
 
   const publicClient = createPublicClient({ chain: anvilChain, transport: http(TEST_RPC_URL) });
@@ -156,6 +166,53 @@ beforeAll(async () => {
     transport: http(TEST_RPC_URL),
     mode: "anvil",
   });
+
+  const witnessDirectoryHash = await walletClient.deployContract({
+    abi: witnessDirectoryArtifact.abi,
+    bytecode: witnessDirectoryArtifact.bytecode.object,
+    args: [account.address],
+  });
+  const witnessDirectoryReceipt = await publicClient.waitForTransactionReceipt({
+    hash: witnessDirectoryHash,
+  });
+
+  const mockVowLibHash = await walletClient.deployContract({
+    abi: mockVowLibArtifact.abi,
+    bytecode: mockVowLibArtifact.bytecode.object,
+  });
+  const mockVowLibReceipt = await publicClient.waitForTransactionReceipt({
+    hash: mockVowLibHash,
+  });
+
+  const testEmitterHash = await walletClient.deployContract({
+    abi: testEmitterArtifact.abi,
+    bytecode: testEmitterArtifact.bytecode.object,
+  });
+  const testEmitterReceipt = await publicClient.waitForTransactionReceipt({
+    hash: testEmitterHash,
+  });
+
+  if (
+    !witnessDirectoryReceipt.contractAddress ||
+    !mockVowLibReceipt.contractAddress ||
+    !testEmitterReceipt.contractAddress
+  ) {
+    throw new Error("E2E contract deployment did not return all contract addresses");
+  }
+
+  addresses = {
+    witnessDirectory: witnessDirectoryReceipt.contractAddress,
+    mockVowLib: mockVowLibReceipt.contractAddress,
+    testEmitter: testEmitterReceipt.contractAddress,
+  };
+
+  const registerSignerHash = await walletClient.writeContract({
+    address: addresses.witnessDirectory,
+    abi: witnessDirectoryArtifact.abi,
+    functionName: "setSigner",
+    args: [ANVIL_ADDRESS, 1n, 1n],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: registerSignerHash });
 
   // Emit test event on-chain
   const txHash = await walletClient.writeContract({
@@ -189,7 +246,12 @@ beforeAll(async () => {
 
   const signer = createEnvSigner(ANVIL_PRIVATE_KEY);
 
-  worker = await setupWorker({ databaseUrl: DATABASE_URL, signer, db });
+  worker = await setupWorker({
+    databaseUrl: DATABASE_URL,
+    signer,
+    db,
+    workerSchema: WORKER_SCHEMA,
+  });
 
   mountWitnessHandler(app, db, worker.addJob, signer.address());
   app.listen(API_PORT);
@@ -206,6 +268,9 @@ afterAll(async () => {
     await db.delete(indexedBlocks).where(eq(indexedBlocks.chainId, TEST_CHAIN_ID));
     await db.delete(rpcs).where(eq(rpcs.chainId, TEST_CHAIN_ID));
     await db.delete(chains).where(eq(chains.chainId, TEST_CHAIN_ID));
+    await db.execute(sql.raw(
+      `set client_min_messages to warning; drop schema if exists ${WORKER_SCHEMA} cascade`
+    ));
     await closeDb();
   }
   await stopAnvil();

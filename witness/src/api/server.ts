@@ -1,7 +1,9 @@
 import { Elysia } from "elysia";
-import { mountWitnessHandler, type AddJobFn } from "./witness.handler.ts";
+import { mountWitnessHandler } from "./witness.handler.ts";
 import { mountSolanaWitnessHandler } from "./solana-witness.handler.ts";
 import { createAdminHandler } from "./admin/index.ts";
+import type { Db } from "../db/client.ts";
+import type { AddJobFn } from "./jobs.ts";
 
 function applyCorsHeaders(request: Request, set: { headers: Record<string, string> }) {
   const origin = request.headers.get("origin");
@@ -16,7 +18,7 @@ function applyCorsHeaders(request: Request, set: { headers: Record<string, strin
 
 export function createApiServer(
   port: number,
-  db: any,
+  db: Db,
   addJob: AddJobFn,
   witnessSigner: string,
   adminPasswordHash: string | null = null,

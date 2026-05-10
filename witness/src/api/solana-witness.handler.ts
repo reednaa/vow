@@ -1,27 +1,15 @@
 import { Elysia } from "elysia";
 import { eq, and } from "drizzle-orm";
-import {
-  compactSignatureToSignature,
-  type Hex,
-  parseCompactSignature,
-  recoverAddress,
-} from "viem";
+import type { Hex } from "viem";
 import { chains, solanaIndexedSlots, solanaIndexedEvents, rpcs } from "../db/schema.ts";
-import { graphileWorkerPrivateJobs } from "../db/graphile-worker.ts";
 import type { Db } from "../db/client.ts";
-import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeSolanaEvent } from "../core/solana-encoding.ts";
-import { computeVowDigest } from "../core/signing.ts";
-import { caip2ToNumericChainId, normalizeChainId } from "../core/chain-utils.ts";
+import { normalizeChainId } from "../core/chain-utils.ts";
 import { INDEX_SOLANA_SLOT_TASK } from "../worker/index-solana-slot.task.ts";
 import { createSolanaRpcClient } from "../rpc/solana-client.ts";
 import { solanaWitnessParams, solanaWitnessResponse } from "./model.ts";
-
-export type AddJobFn = (
-  identifier: string,
-  payload?: any,
-  spec?: any,
-) => Promise<any>;
+import { buildStoredEventProof, recoverVowSigner } from "./proof.ts";
+import { type AddJobFn, enqueueIndexingJob } from "./jobs.ts";
 
 export function createSolanaWitnessController(
   db: Db,
@@ -81,7 +69,6 @@ export function createSolanaWitnessController(
           return { error: "Indexed slot not found" };
         }
 
-        // Load all events for this slot to reconstruct Merkle tree
         const allEvents = await db
           .select()
           .from(solanaIndexedEvents)
@@ -92,15 +79,8 @@ export function createSolanaWitnessController(
             ),
           );
 
-        // Reconstruct tree
-        const sortedEvents = [...allEvents].sort(
-          (a: any, b: any) => a.treeIndex - b.treeIndex,
-        );
-        const leafHashes = sortedEvents.map((e: any) => e.leafHash as Hex);
-        const { root, tree } = buildMerkleTree(leafHashes);
-        const proof = generateProof(tree, event.treeIndex);
+        const proof = buildStoredEventProof(allEvents, event.treeIndex);
 
-        // Decode canonical bytes
         const canonicalBytes = Buffer.from(event.canonicalBytes, "hex");
         const {
           programId: _programId,
@@ -111,18 +91,11 @@ export function createSolanaWitnessController(
         // Recover signer from EIP-712 signature
         let signatureSigner: string;
         try {
-          const signature = slot.signature as Hex;
-          const recoverableSignature =
-            signature.length === 130
-              ? compactSignatureToSignature(parseCompactSignature(signature))
-              : signature;
-          signatureSigner = await recoverAddress({
-            hash: computeVowDigest({
-              chainId: caip2ToNumericChainId(chainId),
-              rootBlockNumber: event.slot,
-              root: slot.merkleRoot as Hex,
-            }),
-            signature: recoverableSignature,
+          signatureSigner = await recoverVowSigner({
+            chainId,
+            rootBlockNumber: event.slot,
+            root: slot.merkleRoot as Hex,
+            signature: slot.signature as Hex,
           });
         } catch (error) {
           console.error(
@@ -195,53 +168,16 @@ export function createSolanaWitnessController(
         return { error: "Event not found at this event index" };
       }
 
-      // Check for existing Graphile job
       const jobKey = `solana-index:${chainId}:${slotNum}`;
-      let job:
-        | {
-            id: bigint;
-            lockedAt: Date | null;
-            attempts: number;
-            maxAttempts: number;
-          }
-        | null = null;
-      try {
-        const [selectedJob] = await db
-          .select({
-            id: graphileWorkerPrivateJobs.id,
-            lockedAt: graphileWorkerPrivateJobs.lockedAt,
-            attempts: graphileWorkerPrivateJobs.attempts,
-            maxAttempts: graphileWorkerPrivateJobs.maxAttempts,
-          })
-          .from(graphileWorkerPrivateJobs)
-          .where(eq(graphileWorkerPrivateJobs.key, jobKey))
-          .limit(1);
-        job = selectedJob ?? null;
-      } catch {
-        // graphile_worker schema not yet installed
-      }
-
-      if (job) {
-        if (job.lockedAt) {
-          return { status: "indexing" as const };
-        }
-        if (job.attempts >= job.maxAttempts) {
-          return {
-            status: "failed" as const,
-            error: "Slot indexing failed after max retries",
-          };
-        }
-        return { status: "pending" as const };
-      }
-
-      // No job — enqueue one
-      await addJob(
-        INDEX_SOLANA_SLOT_TASK,
-        { chainId, slot: slotNum },
-        { jobKey, maxAttempts: 5 },
-      );
-
-      return { status: "pending" as const };
+      return enqueueIndexingJob({
+        db,
+        addJob,
+        identifier: INDEX_SOLANA_SLOT_TASK,
+        payload: { chainId, slot: slotNum },
+        jobKey,
+        maxAttempts: 5,
+        failureMessage: "Slot indexing failed after max retries",
+      });
     },
     { params: solanaWitnessParams, response: solanaWitnessResponse },
   );

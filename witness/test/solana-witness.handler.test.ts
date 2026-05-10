@@ -72,41 +72,48 @@ beforeEach(async () => {
   txSlots.clear();
   await cleanupSolanaChain();
   await db.insert(chains).values({ chainId: TEST_CHAIN_ID });
-  globalThis.fetch = async (input, init) => {
-    const request = new Request(input, init);
-    if (!request.url.startsWith(RPC_URL)) {
-      return originalFetch(input, init);
-    }
+  globalThis.fetch = Object.assign(
+    async (...args: Parameters<typeof fetch>) => {
+      const [input, init] = args;
+      const request =
+        input instanceof Request
+          ? new Request(input, init as RequestInit | undefined)
+          : new Request(String(input), init as RequestInit | undefined);
+      if (!request.url.startsWith(RPC_URL)) {
+        return originalFetch(...args);
+      }
 
-    const body = await request.json() as {
-      id: string | number | null;
-      method: string;
-      params?: unknown[];
-    };
-    if (body.method === "getTransaction") {
-      const signature = body.params?.[0] as string;
-      const slot = txSlots.get(signature) ?? null;
+      const body = await request.json() as {
+        id: string | number | null;
+        method: string;
+        params?: unknown[];
+      };
+      if (body.method === "getTransaction") {
+        const signature = body.params?.[0] as string;
+        const slot = txSlots.get(signature) ?? null;
+        return Response.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: slot === null ? null : {
+            slot: Number(slot),
+            blockhash: "stub-solana-blockhash",
+            transaction: {
+              signatures: [signature],
+              message: { accountKeys: [], instructions: [] },
+            },
+            meta: null,
+          },
+        });
+      }
+
       return Response.json({
         jsonrpc: "2.0",
         id: body.id,
-        result: slot === null ? null : {
-          slot: Number(slot),
-          blockhash: "stub-solana-blockhash",
-          transaction: {
-            signatures: [signature],
-            message: { accountKeys: [], instructions: [] },
-          },
-          meta: null,
-        },
+        error: { code: -32601, message: "Method not found" },
       });
-    }
-
-    return Response.json({
-      jsonrpc: "2.0",
-      id: body.id,
-      error: { code: -32601, message: "Method not found" },
-    });
-  };
+    },
+    { preconnect: originalFetch.preconnect },
+  );
 });
 
 afterEach(async () => {

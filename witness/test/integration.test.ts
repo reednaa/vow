@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   compactSignatureToSignature,
   type Address,
@@ -22,6 +22,7 @@ import { type ConsistentBlockResult } from "../src/rpc/consistency";
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const TEST_CHAIN_ID = "eip155:99993";
 const API_PORT = 13003;
+const WORKER_SCHEMA = `graphile_worker_integration_${Date.now().toString(36)}`;
 
 const BLOCK_NUMBER = 100n;
 const BLOCK_HASH = ("0x" + "ab".repeat(32)) as Hex;
@@ -115,6 +116,7 @@ beforeAll(async () => {
     databaseUrl: DATABASE_URL,
     signer,
     db,
+    workerSchema: WORKER_SCHEMA,
     fetchBlock: mockFetchBlock,
   });
 
@@ -135,6 +137,9 @@ afterAll(async () => {
   await db.delete(indexedBlocks).where(eq(indexedBlocks.chainId, TEST_CHAIN_ID));
   await db.delete(rpcs).where(eq(rpcs.chainId, TEST_CHAIN_ID));
   await db.delete(chains).where(eq(chains.chainId, TEST_CHAIN_ID));
+  await db.execute(sql.raw(
+    `set client_min_messages to warning; drop schema if exists ${WORKER_SCHEMA} cascade`
+  ));
   await closeDb();
 });
 

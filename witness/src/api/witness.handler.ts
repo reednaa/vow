@@ -1,22 +1,14 @@
 import { Elysia } from "elysia";
 import { eq, and } from "drizzle-orm";
-import {
-  compactSignatureToSignature,
-  type Hex,
-  parseCompactSignature,
-  recoverAddress,
-} from "viem";
+import type { Hex } from "viem";
 import { chains, indexedBlocks, indexedEvents } from "../db/schema.ts";
-import { graphileWorkerPrivateJobs } from "../db/graphile-worker.ts";
 import type { Db } from "../db/client.ts";
-import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeEvent } from "../core/encoding.ts";
-import { computeVowDigest } from "../core/signing.ts";
-import { caip2ToNumericChainId, normalizeChainId } from "../core/chain-utils.ts";
+import { normalizeChainId } from "../core/chain-utils.ts";
 import { INDEX_BLOCK_TASK } from "../worker/index-block.task.ts";
 import { witnessParams, witnessResponse } from "./model.ts";
-
-export type AddJobFn = (identifier: string, payload?: any, spec?: any) => Promise<any>;
+import { buildStoredEventProof, recoverVowSigner } from "./proof.ts";
+import { type AddJobFn, enqueueIndexingJob } from "./jobs.ts";
 
 export function createWitnessController(
   db: Db,
@@ -70,7 +62,6 @@ export function createWitnessController(
           return { error: "Event not found at this logIndex" };
         }
 
-        // Load all events for this block to reconstruct Merkle tree
         const allEvents = await db
           .select()
           .from(indexedEvents)
@@ -81,30 +72,17 @@ export function createWitnessController(
             )
           );
 
-        // Reconstruct tree
-        const sortedEvents = [...allEvents].sort(
-          (a: any, b: any) => a.treeIndex - b.treeIndex
-        );
-        const leafHashes = sortedEvents.map((e: any) => e.leafHash as Hex);
-        const { root, tree } = buildMerkleTree(leafHashes);
-        const proof = generateProof(tree, event.treeIndex);
+        const proof = buildStoredEventProof(allEvents, event.treeIndex);
 
-        // Decode canonical bytes
         const canonicalBytes = Buffer.from(event.canonicalBytes, "hex");
         const { emitter, topics, data } = decodeEvent(new Uint8Array(canonicalBytes));
         let signatureSigner: string;
         try {
-          const signature = block.signature as Hex;
-          const recoverableSignature = signature.length === 130
-            ? compactSignatureToSignature(parseCompactSignature(signature))
-            : signature;
-          signatureSigner = await recoverAddress({
-            hash: computeVowDigest({
-              chainId: caip2ToNumericChainId(chainId),
-              rootBlockNumber: blockNumberBigInt,
-              root: block.merkleRoot as Hex,
-            }),
-            signature: recoverableSignature,
+          signatureSigner = await recoverVowSigner({
+            chainId,
+            rootBlockNumber: blockNumberBigInt,
+            root: block.merkleRoot as Hex,
+            signature: block.signature as Hex,
           });
         } catch (error) {
           console.error(
@@ -133,46 +111,16 @@ export function createWitnessController(
         };
       }
 
-      // Block not indexed — check for existing Graphile job
       const jobKey = `index:${chainId}:${blockNumber}`;
-      let job:
-        | {
-            id: bigint;
-            lockedAt: Date | null;
-            attempts: number;
-            maxAttempts: number;
-          }
-        | null = null;
-      try {
-        const [selectedJob] = await db
-          .select({
-            id: graphileWorkerPrivateJobs.id,
-            lockedAt: graphileWorkerPrivateJobs.lockedAt,
-            attempts: graphileWorkerPrivateJobs.attempts,
-            maxAttempts: graphileWorkerPrivateJobs.maxAttempts,
-          })
-          .from(graphileWorkerPrivateJobs)
-          .where(eq(graphileWorkerPrivateJobs.key, jobKey))
-          .limit(1);
-        job = selectedJob ?? null;
-      } catch {
-        // graphile_worker schema not yet installed; treat as no job
-      }
-
-      if (job) {
-        if (job.lockedAt) {
-          return { status: "indexing" as const };
-        }
-        if (job.attempts >= job.maxAttempts) {
-          return { status: "failed" as const, error: "Block indexing failed after max retries" };
-        }
-        return { status: "pending" as const };
-      }
-
-      // No job — enqueue one
-      await addJob(INDEX_BLOCK_TASK, { chainId, blockNumber }, { jobKey, maxAttempts: 5 });
-
-      return { status: "pending" as const };
+      return enqueueIndexingJob({
+        db,
+        addJob,
+        identifier: INDEX_BLOCK_TASK,
+        payload: { chainId, blockNumber },
+        jobKey,
+        maxAttempts: 5,
+        failureMessage: "Block indexing failed after max retries",
+      });
     },
     { params: witnessParams, response: witnessResponse }
   );

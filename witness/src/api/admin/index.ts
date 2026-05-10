@@ -3,9 +3,10 @@ import staticPlugin from "@elysiajs/static";
 import { existsSync } from "fs";
 import { createAuthHandler } from "./auth.ts";
 import { createAdminApiPlugin } from "./api.ts";
+import type { Db } from "../../db/client.ts";
 
 export function createAdminHandler(
-  db: any,
+  db: Db,
   adminPasswordHash: string | null,
   adminJwtSecret: string | null
 ) {

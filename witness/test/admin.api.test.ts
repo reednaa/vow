@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { SignJWT } from "jose";
-import { Elysia } from "elysia";
 import { eq } from "drizzle-orm";
 import { createDb, closeDb } from "../src/db/client";
 import {
@@ -21,7 +20,7 @@ const SOLANA_CHAIN_ID = normalizeChainId(SOLANA_CHAIN_ALIAS);
 const RPC_URL = "http://stub.admin.rpc";
 
 let db: ReturnType<typeof createDb>;
-let app: Elysia;
+let app: ReturnType<typeof createAdminApiPlugin>;
 let authToken: string;
 let originalFetch: typeof fetch;
 
@@ -52,35 +51,42 @@ async function cleanupChain() {
 
 beforeAll(async () => {
   db = createDb(DATABASE_URL);
-  app = new Elysia().use(createAdminApiPlugin(db, JWT_SECRET));
+  app = createAdminApiPlugin(db, JWT_SECRET);
   authToken = await sign(JWT_SECRET);
   originalFetch = globalThis.fetch;
 });
 
 beforeEach(async () => {
   await cleanupChain();
-  globalThis.fetch = async (input, init) => {
-    const request = new Request(input, init);
-    if (!request.url.startsWith(RPC_URL)) {
-      return originalFetch(input, init);
-    }
+  globalThis.fetch = Object.assign(
+    async (...args: Parameters<typeof fetch>) => {
+      const [input, init] = args;
+      const request =
+        input instanceof Request
+          ? new Request(input, init as RequestInit | undefined)
+          : new Request(String(input), init as RequestInit | undefined);
+      if (!request.url.startsWith(RPC_URL)) {
+        return originalFetch(...args);
+      }
 
-    const body = await request.json() as {
-      id: string | number | null;
-      method: string;
-    };
-    if (body.method === "getSlot") {
-      return Response.json({ jsonrpc: "2.0", id: body.id, result: 777 });
-    }
-    if (body.method === "eth_blockNumber") {
-      return Response.json({ jsonrpc: "2.0", id: body.id, result: "0x2a" });
-    }
-    return Response.json({
-      jsonrpc: "2.0",
-      id: body.id,
-      error: { code: -32601, message: "Method not found" },
-    });
-  };
+      const body = await request.json() as {
+        id: string | number | null;
+        method: string;
+      };
+      if (body.method === "getSlot") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: 777 });
+      }
+      if (body.method === "eth_blockNumber") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: "0x2a" });
+      }
+      return Response.json({
+        jsonrpc: "2.0",
+        id: body.id,
+        error: { code: -32601, message: "Method not found" },
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
 });
 
 afterEach(async () => {
