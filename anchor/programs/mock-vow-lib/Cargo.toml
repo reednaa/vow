@@ -7,6 +7,7 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib", "lib"]
 name = "mock_vow_lib"
+doctest = false
 
 [features]
 default = []
