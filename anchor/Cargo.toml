@@ -1,0 +1,15 @@
+[workspace]
+members = [
+  "crates/vow-lib",
+  "programs/mock-vow-lib",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "UNLICENSED"
+
+[workspace.dependencies]
+anchor-lang = "0.30.1"
+libsecp256k1 = "0.6"
+solana-program = "1.18.26"

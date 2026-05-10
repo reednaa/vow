@@ -1,0 +1,13 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+mock_vow_lib = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkgmDEWJQzn1k"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test --manifest-path Cargo.toml --workspace"
