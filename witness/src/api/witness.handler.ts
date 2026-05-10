@@ -12,7 +12,7 @@ import type { Db } from "../db/client.ts";
 import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeEvent } from "../core/encoding.ts";
 import { computeVowDigest } from "../core/signing.ts";
-import { caip2ToNumericChainId } from "../core/chain-utils.ts";
+import { caip2ToNumericChainId, normalizeChainId } from "../core/chain-utils.ts";
 import { INDEX_BLOCK_TASK } from "../worker/index-block.task.ts";
 import { witnessParams, witnessResponse } from "./model.ts";
 
@@ -27,7 +27,7 @@ export function createWitnessController(
     "/witness/:caip2ChainId/:blockNumber/:logIndex",
     async ({ params, set }) => {
       const { caip2ChainId, blockNumber, logIndex } = params;
-      const chainId = caip2ChainId;
+      const chainId = normalizeChainId(caip2ChainId);
       const blockNumberBigInt = BigInt(blockNumber);
 
       // Check chain exists

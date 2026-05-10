@@ -1,5 +1,6 @@
 import { type Address, type Hex, toBytes, toHex } from "viem";
-import type { SignedWitness } from "./types.js";
+import { caip2ToNumericChainId } from "./chain.js";
+import type { SignedWitness, SolanaWitnessResult } from "./types.js";
 
 function encodeEvent(emitter: Address, topics: Hex[], data: Hex): Uint8Array {
   const emitterBytes = toBytes(emitter); // 20 bytes
@@ -33,6 +34,51 @@ function writePad32(buf: Uint8Array, offset: number, value: bigint) {
   }
 }
 
+function encodeSolanaEvent(programId: Hex, discriminator: Hex, data: Hex): Uint8Array {
+  const programIdBytes = toBytes(programId);
+  const discriminatorBytes = toBytes(discriminator);
+  const dataBytes = toBytes(data);
+
+  const result = new Uint8Array(40 + dataBytes.length);
+  result.set(programIdBytes, 0);
+  result.set(discriminatorBytes, 32);
+  result.set(dataBytes, 40);
+  return result;
+}
+
+function sameWitnessEvent(a: SignedWitness["witness"], b: SignedWitness["witness"]): boolean {
+  if (a.mode !== b.mode) return false;
+  if (a.mode === "ethereum" && b.mode === "ethereum") {
+    return (
+      a.event.emitter.toLowerCase() === b.event.emitter.toLowerCase() &&
+      a.event.topics.length === b.event.topics.length &&
+      a.event.topics.every(
+        (topic, index) => topic.toLowerCase() === b.event.topics[index]!.toLowerCase()
+      ) &&
+      a.event.data.toLowerCase() === b.event.data.toLowerCase()
+    );
+  }
+
+  const solanaA = a as SolanaWitnessResult;
+  const solanaB = b as SolanaWitnessResult;
+  return (
+    solanaA.event.programId.toLowerCase() === solanaB.event.programId.toLowerCase() &&
+    solanaA.event.discriminator.toLowerCase() === solanaB.event.discriminator.toLowerCase() &&
+    solanaA.event.data.toLowerCase() === solanaB.event.data.toLowerCase()
+  );
+}
+
+function encodeWitnessEvent(witness: SignedWitness["witness"]): Uint8Array {
+  if (witness.mode === "ethereum") {
+    return encodeEvent(witness.event.emitter, witness.event.topics, witness.event.data);
+  }
+  return encodeSolanaEvent(
+    witness.event.programId,
+    witness.event.discriminator,
+    witness.event.data
+  );
+}
+
 /**
  * Encodes 1+ witness results into the binary Vow format accepted by
  * `VowLib.processVow()`.
@@ -59,14 +105,7 @@ export function encodeVow(witnesses: SignedWitness[]): Hex {
     if (w.rootBlockNumber !== first.rootBlockNumber) {
       throw new Error("All witnesses must have the same rootBlockNumber");
     }
-    if (
-      w.event.emitter.toLowerCase() !== first.event.emitter.toLowerCase() ||
-      w.event.topics.length !== first.event.topics.length ||
-      w.event.topics.some(
-        (t, j) => t.toLowerCase() !== first.event.topics[j]!.toLowerCase()
-      ) ||
-      w.event.data.toLowerCase() !== first.event.data.toLowerCase()
-    ) {
+    if (!sameWitnessEvent(first, w)) {
       throw new Error("All witnesses must attest to the same event");
     }
   }
@@ -79,7 +118,7 @@ export function encodeVow(witnesses: SignedWitness[]): Hex {
   }
 
   const proof = first.proof;
-  const eventBytes = encodeEvent(first.event.emitter, first.event.topics, first.event.data);
+  const eventBytes = encodeWitnessEvent(first);
 
   const P = proof.length;
   const S = sorted.length;
@@ -92,7 +131,7 @@ export function encodeVow(witnesses: SignedWitness[]): Hex {
   const buf = new Uint8Array(total);
   const view = new DataView(buf.buffer);
 
-  writePad32(buf, 0, BigInt(first.chainId));
+  writePad32(buf, 0, caip2ToNumericChainId(first.chainId));
   writePad32(buf, 32, BigInt(first.rootBlockNumber));
   buf[64] = P;
   buf[65] = S;

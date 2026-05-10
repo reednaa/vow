@@ -6,7 +6,7 @@ Vow is an event attestation framework for providing on-chain applications with a
 The project is split into two parts:
 
 - [`/witness`](/witness): offchain witness service that indexes blocks, canonicalizes events, builds Merkle roots, signs roots, and serves proofs for individual events.
-- [`/solidity`](/solidity): onchain verification library and witness directory contracts that validate witness signatures plus Merkle proofs and returns decoded event data.
+- [`/solidity`](/solidity): onchain verification library and witness directory contracts that validate witness signatures plus Merkle proofs and return raw canonical event bytes for consumer-selected decoding.
 
 ## Project Goal
 
@@ -21,6 +21,6 @@ Create the cheapest, most flexible, and most efficient cross-chain messaging-adj
 1. Multiple witness operators independently derive the same canonical event set for a block.
 2. They compute the same Merkle root and sign a typed message for that root.
 3. A client packages one event, its Merkle proof, and witness signatures into a `vow` payload.
-4. Consumer contracts call `VowLib.processVow(...)` to verify quorum signatures and proof membership before accepting the event.
+4. Consumer contracts call `VowLib.processVow(...)` to verify quorum signatures and proof membership, then decode the returned raw event bytes with the strategy they expect.
 
 This gives applications a clear trust model: cryptographic proof of inclusion plus an explicit witness quorum policy.

@@ -116,6 +116,39 @@ function makeBlockWithSplitTxEvents(): SolanaBlock {
   };
 }
 
+function makeBlockWithLoadedAddressPrograms(): SolanaBlock {
+  const programId = makeSolanaPubkey(9);
+
+  return {
+    blockhash: "solana-loaded-address-blockhash",
+    blockHeight: 101n,
+    parentSlot: 100n,
+    transactions: [
+      {
+        transaction: {
+          signatures: ["tx-signature-loaded"],
+          message: {
+            accountKeys: [],
+            instructions: [{ programIdIndex: 0, data: "1" }],
+          },
+        },
+        meta: {
+          loadedAddresses: {
+            writable: [programId],
+            readonly: [],
+          },
+          innerInstructions: [
+            {
+              index: 0,
+              instructions: [{ programIdIndex: 0, data: makeEmitCpiData(3, 30) }],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
 const BLOCK_HASH = "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd" as Hex;
 
 const SAMPLE_LOGS = [
@@ -230,5 +263,20 @@ describe("fetchSolanaSlotConsistent", () => {
     expect(result.events).toHaveLength(2);
     expect(result.events.map((event) => event.eventIndexLocal)).toEqual([0, 1]);
     expect(result.latestSlot).toBe(700n);
+  });
+
+  it("extracts emit_cpi events when program IDs come from loaded addresses", async () => {
+    const block = makeBlockWithLoadedAddressPrograms();
+    const rpcs = [
+      makeSolanaRpcClient({ block, headSlot: 710n }),
+      makeSolanaRpcClient({ block, headSlot: 705n }),
+    ];
+
+    const result = await fetchSolanaSlotConsistent(rpcs, 101n);
+
+    expect(result.events).toHaveLength(1);
+    expect(toHex(result.events[0]!.programId)).toBe(toHex(bs58.decode(makeSolanaPubkey(9))));
+    expect(result.events[0]!.eventIndexLocal).toBe(0);
+    expect(result.latestSlot).toBe(710n);
   });
 });

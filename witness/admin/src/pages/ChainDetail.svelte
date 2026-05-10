@@ -50,7 +50,7 @@
     addSuccess = "";
     try {
       const res: any = await api.addRpc(chainId, newRpcUrl);
-      addSuccess = `RPC added (current block: ${res.blockNumber})`;
+      addSuccess = `RPC added (current height: ${res.blockNumber})`;
       newRpcUrl = "";
       rpcs = await api.getRpcs(chainId);
     } catch (e: any) {
@@ -124,7 +124,7 @@
     <div style="padding: 16px 20px; border-bottom: 1px solid var(--border);">
       {#if rpcs.length < 2}
         <div class="alert alert-error" style="margin-bottom:12px;">
-          ⚠ At least 2 RPCs are required for block indexing.
+          ⚠ At least 2 RPCs are required for witness indexing.
         </div>
       {/if}
       {#if addError}<div class="alert alert-error">{addError}</div>{/if}
@@ -141,7 +141,7 @@
         </button>
       </div>
       <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">
-        URL will be validated by calling <code>eth_blockNumber</code> before saving.
+        URL will be validated with the chain's native RPC method before saving.
       </p>
     </div>
     {#if rpcs.length === 0}

@@ -36,6 +36,11 @@ ALTER TABLE "indexed_blocks" ALTER COLUMN "chain_id" SET DATA TYPE text;
 ALTER TABLE "indexed_events" ALTER COLUMN "chain_id" SET DATA TYPE text;
 ALTER TABLE "rpcs" ALTER COLUMN "chain_id" SET DATA TYPE text;
 --> statement-breakpoint
+UPDATE "rpcs" SET "chain_id" = 'eip155:' || "chain_id";
+UPDATE "indexed_blocks" SET "chain_id" = 'eip155:' || "chain_id";
+UPDATE "indexed_events" SET "chain_id" = 'eip155:' || "chain_id";
+UPDATE "chains" SET "chain_id" = "caip2";
+--> statement-breakpoint
 ALTER TABLE "chains" DROP COLUMN "caip2";
 ALTER TABLE "chains" ADD PRIMARY KEY ("chain_id");
 --> statement-breakpoint

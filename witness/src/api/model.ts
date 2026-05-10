@@ -65,10 +65,7 @@ const solanaWitnessReady = t.Object({
 });
 
 export const solanaWitnessParams = t.Object({
-  caip2ChainId: t.String({
-    pattern:
-      "^solana:(mainnet|5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d|devnet|EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG|testnet|4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY)$",
-  }),
+  caip2ChainId: t.String({ pattern: "^solana:.+$" }),
   txSignature: t.String({ minLength: 1 }),
   index: t.Numeric({ minimum: 0 }),
 });

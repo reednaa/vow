@@ -66,11 +66,20 @@ const mockVowLibAbi = [
     outputs: [
       { name: "chainId", type: "uint256" },
       { name: "rootBlockNumber", type: "uint256" },
+      { name: "evt", type: "bytes" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "decodeEvent",
+    inputs: [{ name: "evt", type: "bytes" }],
+    outputs: [
       { name: "emitter", type: "address" },
       { name: "topics", type: "bytes32[]" },
       { name: "data", type: "bytes" },
     ],
-    stateMutability: "view",
+    stateMutability: "pure",
   },
 ] as const;
 
@@ -253,7 +262,7 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
     expect(recovered.toLowerCase()).toBe(ANVIL_ADDRESS.toLowerCase());
   });
 
-  it("on-chain processVow accepts the encoded vow and returns original event data", async () => {
+  it("on-chain processVow accepts the encoded vow and returns raw evt for explicit decoding", async () => {
     const res = await fetch(
       `${BASE_URL}/witness/${TEST_CHAIN_ID}/${Number(eventBlockNumber)}/${eventLogIndex}`
     );
@@ -287,9 +296,15 @@ describe("E2E: anvil → witness → on-chain processVow", () => {
       abi: mockVowLibAbi,
       functionName: "processVow",
       args: [addresses.witnessDirectory, vowHex],
-    })) as [bigint, bigint, Address, Hex[], Hex];
+    })) as [bigint, bigint, Hex];
 
-    const [retChainId, , retEmitter, retTopics, retData] = result;
+    const [retChainId, , evt] = result;
+    const [retEmitter, retTopics, retData] = (await publicClient.readContract({
+      address: addresses.mockVowLib,
+      abi: mockVowLibAbi,
+      functionName: "decodeEvent",
+      args: [evt],
+    })) as [Address, Hex[], Hex];
 
     expect(retChainId).toBe(caip2ToNumericChainId(TEST_CHAIN_ID));
     expect(retEmitter.toLowerCase()).toBe(

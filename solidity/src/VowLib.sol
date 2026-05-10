@@ -138,19 +138,8 @@ library VowLib {
   function processVow(
     address directory,
     bytes calldata vow
-  )
-    internal
-    view
-    returns (
-      uint256 chainId,
-      uint256 rootBlockNumber,
-      address emitter,
-      bytes32[] calldata topics,
-      bytes calldata data
-    )
-  {
+  ) internal view returns (uint256 chainId, uint256 rootBlockNumber, bytes calldata evt) {
     // Load the header.
-    bytes calldata evt;
     uint256 psize;
     uint256 S;
     uint256 E;
@@ -209,9 +198,6 @@ library VowLib {
       }
     }
     if (!valid) revert InvalidlySignedRoot();
-
-    // Step 3. return event.
-    (emitter, topics, data) = decodeEvent(evt);
   }
 
   //--- Events ---//
@@ -340,7 +326,7 @@ library VowLib {
     assembly ("memory-safe") {
       programId := calldataload(evt.offset)
       let word2 := calldataload(add(evt.offset, 32))
-      discriminator := shr(192, word2)
+      discriminator := word2
       data.offset := add(evt.offset, 40)
       data.length := sub(evt.length, 40)
     }

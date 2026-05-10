@@ -120,7 +120,7 @@
         </button>
       </div>
       <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">
-        Enter a CAIP-2 identifier: <code>eip155:&lt;chainId&gt;</code> for EVM chains, <code>solana:&lt;cluster&gt;</code> for Solana.
+        Enter a CAIP-2 identifier: <code>eip155:&lt;chainId&gt;</code> for EVM chains, <code>solana:&lt;cluster&gt;</code> or a canonical Solana genesis hash for Solana. Aliases like <code>solana:mainnet</code> are accepted and stored canonically.
       </p>
     </div>
   </div>

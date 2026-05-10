@@ -8,7 +8,7 @@ import {
   toBytes,
 } from "viem";
 import { computeVowDigest, createEnvSigner } from "../src/core/signing";
-import { caip2ToNumericChainId } from "../src/core/chain-utils";
+import { caip2ToNumericChainId, normalizeChainId } from "../src/core/chain-utils";
 
 const TEST_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const TEST_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -96,5 +96,27 @@ describe("caip2ToNumericChainId", () => {
   it("throws for invalid CAIP-2", () => {
     expect(() => caip2ToNumericChainId("eth:1")).toThrow("Cannot extract numeric chain ID");
     expect(() => caip2ToNumericChainId("bitcoin:1")).toThrow("Cannot extract numeric chain ID");
+  });
+
+  it("normalizes Solana aliases before numeric conversion", () => {
+    const canonicalMainnet = normalizeChainId("solana:mainnet");
+    expect(caip2ToNumericChainId("solana:mainnet")).toBe(
+      caip2ToNumericChainId(canonicalMainnet)
+    );
+  });
+});
+
+describe("normalizeChainId", () => {
+  it("canonicalizes supported Solana aliases", () => {
+    expect(normalizeChainId("solana:mainnet")).toBe(
+      "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+    );
+    expect(normalizeChainId("solana:devnet")).toBe(
+      "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+    );
+  });
+
+  it("rejects invalid Solana identifiers", () => {
+    expect(() => normalizeChainId("solana:not-base58")).toThrow("Invalid");
   });
 });

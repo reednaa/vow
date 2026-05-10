@@ -24,6 +24,11 @@ export type SolanaInnerIxGroup = {
   instructions: SolanaIx[];
 };
 
+export type SolanaLoadedAddresses = {
+  writable?: string[];
+  readonly?: string[];
+};
+
 export type SolanaTx = {
   transaction: {
     signatures: string[]; // base58 tx signatures
@@ -31,6 +36,7 @@ export type SolanaTx = {
   };
   meta: {
     innerInstructions?: SolanaInnerIxGroup[];
+    loadedAddresses?: SolanaLoadedAddresses;
   } | null;
 };
 
@@ -125,16 +131,18 @@ export function extractEmitCpiEvents(block: SolanaBlock): SolanaEvent[] {
     const message = tx.transaction?.message;
     if (!message) continue;
 
-    const staticAccts = message.accountKeys || [];
-    const topIxs = message.instructions || [];
-
     const meta = tx.meta;
+    const staticAccts = message.accountKeys || [];
+    const loadedWritable = meta?.loadedAddresses?.writable || [];
+    const loadedReadonly = meta?.loadedAddresses?.readonly || [];
+    const allAccts = [...staticAccts, ...loadedWritable, ...loadedReadonly];
+    const topIxs = message.instructions || [];
     const innerIxGroups = meta?.innerInstructions;
 
     // Resolve parent program for each top-level ix
     const parentPrograms: (string | null)[] = topIxs.map((ix) => {
-      if (ix.programIdIndex != null && staticAccts[ix.programIdIndex]) {
-        return staticAccts[ix.programIdIndex]!;
+      if (ix.programIdIndex != null && allAccts[ix.programIdIndex]) {
+        return allAccts[ix.programIdIndex]!;
       }
       return null;
     });
@@ -152,7 +160,7 @@ export function extractEmitCpiEvents(block: SolanaBlock): SolanaEvent[] {
       for (const innerIx of group.instructions) {
         const innerProgram =
           innerIx.programIdIndex != null
-            ? staticAccts[innerIx.programIdIndex] ?? null
+            ? allAccts[innerIx.programIdIndex] ?? null
             : null;
 
         if (!innerProgram || !innerIx.data) continue;

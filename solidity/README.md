@@ -5,7 +5,7 @@ This repository contains a Solidity implementation of the Vow event attestation 
 High level idea:
 - For each source block, witnesses build a canonical list of events.
 - Events are ordered by hash, merklized, and the root is signed by a quorum of witnesses.
-- Applications submit a `vow` payload and call `VowLib.processVow(...)` to recover one proven event.
+- Applications submit a `vow` payload and call `VowLib.processVow(...)` to verify one proven event and recover its raw canonical bytes.
 
 ## Contracts
 
@@ -14,6 +14,7 @@ High level idea:
   - Event leaf hashing and Merkle root reconstruction from proofs.
   - Witness signature verification over a typed `Vow` message.
   - Main entrypoint for consumers: `processVow(address directory, bytes calldata vow)`.
+  - Consumer-selected decoders: `decodeEvent(bytes calldata evt)` and `decodeEmitCPI(bytes calldata evt)`.
 - `src/WitnessDirectory.sol`
   - Owner-managed signer directory.
   - Maps signer indexes to signer addresses.
@@ -37,11 +38,12 @@ High level idea:
    - Signer index map
    - Signatures
    - Encoded event
-6. `processVow` verifies signer quorum and signatures, reconstructs root, and returns decoded event data.
+6. `processVow` verifies signer quorum and signatures, reconstructs root, and returns the raw canonical event bytes.
+7. Consumer contracts choose the decoding strategy they expect and call either `decodeEvent(evt)` or `decodeEmitCPI(evt)`.
 
 ## Integrating `VowLib.processVow`
 
-`processVow` is `internal`, so apps use it from their own contract.
+`processVow` is `internal`, so apps use it from their own contract and then explicitly decode the returned event bytes.
 
 ```solidity
 // SPDX-License-Identifier: UNLICENSED
@@ -56,30 +58,38 @@ contract Consumer {
     directory = _directory;
   }
 
-  function consume(bytes calldata vow) external view returns (address emitter, bytes32[] calldata topics, bytes calldata data) {
-    (
-      uint256 chainId,
-      uint256 latestBlockNumber,
-      uint256 rootBlockNumber,
-      address decodedEmitter,
-      bytes32[] calldata decodedTopics,
-      bytes calldata decodedData
-    ) = VowLib.processVow(directory, vow);
+  function consume(bytes calldata vow)
+    external
+    view
+    returns (address emitter, bytes32[] calldata topics, bytes calldata data)
+  {
+    (uint256 chainId, uint256 rootBlockNumber, bytes calldata evt) = VowLib.processVow(
+      directory,
+      vow
+    );
 
     require(chainId == block.chainid, "wrong chain");
-    require(rootBlockNumber <= latestBlockNumber, "bad block range");
+    require(rootBlockNumber <= block.number, "bad block range");
 
-    return (decodedEmitter, decodedTopics, decodedData);
+    return VowLib.decodeEvent(evt);
   }
 }
+```
+
+For Solana-style canonical events, the consumer makes the other explicit choice:
+
+```solidity
+(uint256 chainId, uint256 rootSlot, bytes calldata evt) = VowLib.processVow(directory, vow);
+(bytes32 programId, bytes8 discriminator, bytes calldata data) = VowLib.decodeEmitCPI(evt);
 ```
 
 ### Integration checklist
 
 - Validate protocol semantics in your app, not only cryptography:
   - `chainId == block.chainid` if cross-chain proofs are not intended.
-  - Finality policy for `latestBlockNumber` / `rootBlockNumber`.
+  - Finality policy for `rootBlockNumber`.
   - Allowed emitters and expected topic schemas.
+  - The expected event decoder for the canonical bytes you accept.
   - Optional idempotency guard (for example store processed `(rootBlockNumber, leafHash)`).
 - Treat directory governance as trust-critical:
   - `processVow` fully trusts `directory.getQourumSet(...)`.
@@ -118,16 +128,18 @@ Witnesses should agree on one canonical offchain pipeline and treat it as consen
 ### Before signing
 
 - Use a deterministic event extraction pipeline for the target block.
-- Encode each event exactly as expected by `VowLib.decodeEvent`.
+- Encode each event exactly as expected by the consumer decoder:
+  - EVM logs: `VowLib.decodeEvent`
+  - Solana emit_cpi events: `VowLib.decodeEmitCPI`
 - Compute leaf hashes exactly as `keccak256(keccak256(evt))`.
 - Build Merkle levels with the same pair-hash convention used by consumers.
 - Use deterministic ordering of leaves by hash for the block.
-- Confirm `chainId`, `rootBlockNumber`, and `latestBlockNumber` policy.
+- Confirm `chainId` and `rootBlockNumber` policy.
 
 ### Signing details
 
 Witnesses sign the typed `Vow` struct digest:
-- `Vow(uint256 chainId,uint256 latestBlockNumber,uint256 rootBlockNumber,bytes32 root)`
+- `Vow(uint256 chainId,uint256 rootBlockNumber,bytes32 root)`
 - EIP-712 style digest with bare domain `keccak256("EIP712Domain()")`.
 
 ### Operational concerns

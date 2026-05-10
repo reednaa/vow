@@ -2,17 +2,32 @@ import { Elysia, t } from "elysia";
 import { jwt } from "@elysiajs/jwt";
 import { eq, count, desc, sql } from "drizzle-orm";
 import { createPublicClient, http } from "viem";
-import { chains, rpcs, indexedBlocks, indexedEvents } from "../../db/schema.ts";
+import {
+  chains,
+  rpcs,
+  indexedBlocks,
+  indexedEvents,
+  solanaIndexedEvents,
+  solanaIndexedSlots,
+} from "../../db/schema.ts";
 import {
   graphileWorkerPrivateJobs,
   graphileWorkerPrivateTasks,
 } from "../../db/graphile-worker.ts";
 import type { Db } from "../../db/client.ts";
+import { normalizeChainId } from "../../core/chain-utils.ts";
+import { createSolanaRpcClient } from "../../rpc/solana-client.ts";
 
 async function validateRpc(
-  url: string
+  url: string,
+  chainId: string,
 ): Promise<{ ok: boolean; blockNumber?: string; error?: string }> {
   try {
+    if (chainId.startsWith("solana:")) {
+      const slot = await createSolanaRpcClient(url).getSlot();
+      return { ok: true, blockNumber: slot.toString() };
+    }
+
     const client = createPublicClient({ transport: http(url, { timeout: 5_000 }) });
     const blockNumber = await client.getBlockNumber();
     return { ok: true, blockNumber: blockNumber.toString() };
@@ -99,9 +114,10 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
     .post(
       "/chains",
       async ({ body, set }) => {
-        const { chainId } = body;
-        // Validate CAIP-2 format
-        if (!/^(eip155:\d+|solana:.+)$/.test(chainId)) {
+        let chainId: string;
+        try {
+          chainId = normalizeChainId(body.chainId);
+        } catch {
           set.status = 400;
           return { error: `chainId must be a valid CAIP-2 string (e.g., "eip155:1" or "solana:mainnet")` };
         }
@@ -119,7 +135,13 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
       { body: t.Object({ chainId: t.String({ pattern: "^(eip155:\\d+|solana:.+)$" }) }) }
     )
     .delete("/chains/:chainId", async ({ params, set }) => {
-      const chainId = params.chainId;
+      let chainId: string;
+      try {
+        chainId = normalizeChainId(params.chainId);
+      } catch {
+        set.status = 400;
+        return { error: "Invalid chain ID" };
+      }
       const [existing] = await db
         .select()
         .from(chains)
@@ -129,6 +151,8 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
         return { error: "Chain not found" };
       }
       // Delete dependents in FK order
+      await db.delete(solanaIndexedEvents).where(eq(solanaIndexedEvents.chainId, chainId));
+      await db.delete(solanaIndexedSlots).where(eq(solanaIndexedSlots.chainId, chainId));
       await db.delete(indexedEvents).where(eq(indexedEvents.chainId, chainId));
       await db.delete(indexedBlocks).where(eq(indexedBlocks.chainId, chainId));
       await db.delete(rpcs).where(eq(rpcs.chainId, chainId));
@@ -138,7 +162,13 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
 
     // ── RPCs ──────────────────────────────────────────────────────────────────
     .get("/chains/:chainId/rpcs", async ({ params, set }) => {
-      const chainId = params.chainId;
+      let chainId: string;
+      try {
+        chainId = normalizeChainId(params.chainId);
+      } catch {
+        set.status = 400;
+        return { error: "Invalid chain ID" };
+      }
       const [chain] = await db
         .select()
         .from(chains)
@@ -152,7 +182,13 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
     .post(
       "/chains/:chainId/rpcs",
       async ({ params, body, set }) => {
-        const chainId = params.chainId;
+        let chainId: string;
+        try {
+          chainId = normalizeChainId(params.chainId);
+        } catch {
+          set.status = 400;
+          return { error: "Invalid chain ID" };
+        }
         const [chain] = await db
           .select()
           .from(chains)
@@ -161,7 +197,7 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
           set.status = 404;
           return { error: "Chain not found" };
         }
-        const validation = await validateRpc(body.url);
+        const validation = await validateRpc(body.url, chainId);
         if (!validation.ok) {
           set.status = 400;
           return { error: `RPC validation failed: ${validation.error}` };
@@ -226,7 +262,13 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
 
     // ── Indexed blocks per chain ──────────────────────────────────────────────
     .get("/chains/:chainId/blocks", async ({ params, set }) => {
-      const chainId = params.chainId;
+      let chainId: string;
+      try {
+        chainId = normalizeChainId(params.chainId);
+      } catch {
+        set.status = 400;
+        return { error: "Invalid chain ID" };
+      }
       const [chain] = await db
         .select()
         .from(chains)

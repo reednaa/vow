@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import { Test, console2 } from "forge-std/Test.sol";
 
-import { VowLib } from "../src/VowLib.sol";
 import { WitnessDirectory } from "../src/WitnessDirectory.sol";
 import { MockEvent } from "./VowLib.t.sol";
 
@@ -61,22 +60,24 @@ contract GasEstimateTest is Test {
   // ─────────────────────────────────────────────────────────────────────────
 
   /// Build a proof path of `depth` zero-siblings and compute the resulting root.
-  function _buildProofAndRoot(uint256 depth) internal view returns (bytes32[] memory proof, bytes32 root) {
+  function _buildProofAndRoot(
+    uint256 depth
+  ) internal view returns (bytes32[] memory proof, bytes32 root) {
     proof = new bytes32[](depth);
     root = leaf;
     for (uint256 i = 0; i < depth; ++i) {
       bytes32 sibling = bytes32(uint256(i + 1)); // distinct non-zero siblings
       proof[i] = sibling;
       // Sorted-pair hash (same as computeMerkleRootCalldata)
-      if (root <= sibling) {
-        root = keccak256(abi.encodePacked(root, sibling));
-      } else {
-        root = keccak256(abi.encodePacked(sibling, root));
-      }
+      if (root <= sibling) root = keccak256(abi.encodePacked(root, sibling));
+      else root = keccak256(abi.encodePacked(sibling, root));
     }
   }
 
-  function _sign(uint256 pk, bytes32 root) internal view returns (bytes memory sig) {
+  function _sign(
+    uint256 pk,
+    bytes32 root
+  ) internal view returns (bytes memory sig) {
     bytes32 digest = helper.hashTypedData(helper.vowTypehash(CHAIN_ID, ROOT_BLOCK, root));
     (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
     sig = abi.encodePacked(r, s, v);
@@ -93,7 +94,9 @@ contract GasEstimateTest is Test {
 
     // Compute sigs section size
     uint256 sigsSize;
-    for (uint256 i = 0; i < S; ++i) sigsSize += 2 + sigs[i].length;
+    for (uint256 i = 0; i < S; ++i) {
+      sigsSize += 2 + sigs[i].length;
+    }
 
     uint256 total = 68 + P * 32 + S + sigsSize + evtLen;
     vow = new bytes(total);
@@ -123,10 +126,14 @@ contract GasEstimateTest is Test {
       vow[cursor] = bytes1(uint8(sl >> 8));
       vow[cursor + 1] = bytes1(uint8(sl));
       cursor += 2;
-      for (uint256 j = 0; j < sl; ++j) vow[cursor + j] = sigs[i][j];
+      for (uint256 j = 0; j < sl; ++j) {
+        vow[cursor + j] = sigs[i][j];
+      }
       cursor += sl;
     }
-    for (uint256 j = 0; j < evtLen; ++j) vow[cursor + j] = evtBytes[j];
+    for (uint256 j = 0; j < evtLen; ++j) {
+      vow[cursor + j] = evtBytes[j];
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

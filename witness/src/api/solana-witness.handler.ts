@@ -12,7 +12,7 @@ import type { Db } from "../db/client.ts";
 import { buildMerkleTree, generateProof } from "../core/merkle.ts";
 import { decodeSolanaEvent } from "../core/solana-encoding.ts";
 import { computeVowDigest } from "../core/signing.ts";
-import { caip2ToNumericChainId } from "../core/chain-utils.ts";
+import { caip2ToNumericChainId, normalizeChainId } from "../core/chain-utils.ts";
 import { INDEX_SOLANA_SLOT_TASK } from "../worker/index-solana-slot.task.ts";
 import { createSolanaRpcClient } from "../rpc/solana-client.ts";
 import { solanaWitnessParams, solanaWitnessResponse } from "./model.ts";
@@ -22,23 +22,6 @@ export type AddJobFn = (
   payload?: any,
   spec?: any,
 ) => Promise<any>;
-
-const SOLANA_CAIP2_RE =
-  /^solana:(mainnet|5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d|devnet|EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG|testnet|4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY)$/;
-
-const CAIP2_ALIASES: Record<string, string> = {
-  mainnet: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
-  devnet: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
-  testnet: "solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY",
-};
-
-function resolveCaip2(raw: string): string {
-  const match = SOLANA_CAIP2_RE.exec(raw);
-  if (!match) throw new Error(`Invalid Solana CAIP-2: ${raw}`);
-  const cluster = match[1]!;
-  if (cluster.length > 20) return raw;
-  return CAIP2_ALIASES[cluster] ?? raw;
-}
 
 export function createSolanaWitnessController(
   db: Db,
@@ -52,7 +35,7 @@ export function createSolanaWitnessController(
 
       let chainId: string;
       try {
-        chainId = resolveCaip2(caip2ChainId);
+        chainId = normalizeChainId(caip2ChainId);
       } catch {
         set.status = 404;
         return { error: "Invalid chain identifier" };
@@ -136,7 +119,7 @@ export function createSolanaWitnessController(
           signatureSigner = await recoverAddress({
             hash: computeVowDigest({
               chainId: caip2ToNumericChainId(chainId),
-              rootBlockNumber: BigInt(event.slot.toString()),
+              rootBlockNumber: event.slot,
               root: slot.merkleRoot as Hex,
             }),
             signature: recoverableSignature,
@@ -197,6 +180,20 @@ export function createSolanaWitnessController(
       }
 
       const slotNum = Number(resolvedSlot);
+      const [indexedSlot] = await db
+        .select()
+        .from(solanaIndexedSlots)
+        .where(
+          and(
+            eq(solanaIndexedSlots.chainId, chainId),
+            eq(solanaIndexedSlots.slot, resolvedSlot),
+          ),
+        );
+
+      if (indexedSlot) {
+        set.status = 404;
+        return { error: "Event not found at this event index" };
+      }
 
       // Check for existing Graphile job
       const jobKey = `solana-index:${chainId}:${slotNum}`;

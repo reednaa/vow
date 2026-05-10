@@ -1,12 +1,13 @@
 # vow-witness
 
-`vow-witness` is an EVM event attestation service. It indexes block logs, builds a Merkle tree over canonical event encodings, signs the block root, and serves event-level witness payloads over HTTP.
+`vow-witness` is an EVM and Solana event attestation service. It indexes EVM block logs and Solana `emit_cpi!()` events, builds a Merkle tree over canonical event encodings, signs the root, and serves event-level witness payloads over HTTP.
 
 ## What This Service Does
 
-- Accepts witness requests by chain/block/log index.
+- Accepts EVM witness requests by chain/block/log index and Solana witness requests by chain/transaction/event index.
 - Enqueues block indexing when data is not indexed yet.
 - Fetches and cross-checks block/log data from multiple RPC providers.
+- Canonicalizes configured chain IDs to CAIP-2 before storage and lookup.
 - Persists indexed blocks/events in PostgreSQL.
 - Returns a signed witness payload with Merkle proof when ready.
 
@@ -14,12 +15,12 @@
 
 Runtime architecture:
 
-1. API server (`GET /witness/:caip2ChainId/:blockNumber/:logIndex`)
+1. API server (`GET /witness/:caip2ChainId/:blockNumber/:logIndex` and `GET /witness/solana/:caip2ChainId/:txSignature/:index`)
 2. Health server (`GET /health`)
 3. Graphile Worker (processes `index-block` jobs, concurrency `1`)
 4. PostgreSQL (stores witness data and worker jobs)
 
-Request flow:
+EVM request flow:
 
 1. Client calls `GET /witness/eip155:{chainId}/{blockNumber}/{logIndex}`.
 2. API validates chain config in `chains`.
@@ -30,11 +31,14 @@ Request flow:
 7. Exhausted retries: return `status: "failed"`.
 8. Worker task fetches block/logs from configured RPCs, verifies consistency, computes root/signature, writes indexed rows, and future requests return `ready`.
 
+Solana request flow mirrors the same pattern with transaction-signature lookups, slot indexing (`index-solana-slot`), and canonical `emit_cpi!()` event bytes.
+
 ## Required Services
 
 - Bun `1.3.5` or newer
 - PostgreSQL `16`
 - At least two RPC URLs per configured chain
+- Solana chains require Solana JSON-RPC endpoints; EVM chains require Ethereum-compatible JSON-RPC endpoints
 - Foundry (`anvil`) only if you run E2E tests
 
 ## Environment Variables
@@ -73,19 +77,21 @@ export WITNESS_PRIVATE_KEY=0x0123456789abcdef0123456789abcdef0123456789abcdef012
 bun run db:migrate
 ```
 
-5. Seed chain + RPC configuration (example: Ethereum mainnet, chain `1`).
+5. Seed chain + RPC configuration (example: Ethereum mainnet).
 
 ```bash
 psql "$DATABASE_URL" <<'SQL'
-INSERT INTO chains (chain_id, caip2) VALUES (1, 'eip155:1')
-ON CONFLICT (chain_id) DO UPDATE SET caip2 = EXCLUDED.caip2;
+INSERT INTO chains (chain_id) VALUES ('eip155:1')
+ON CONFLICT (chain_id) DO NOTHING;
 
-DELETE FROM rpcs WHERE chain_id = 1;
+DELETE FROM rpcs WHERE chain_id = 'eip155:1';
 INSERT INTO rpcs (chain_id, url) VALUES
-  (1, 'https://eth.llamarpc.com'),
-  (1, 'https://rpc.ankr.com/eth');
+  ('eip155:1', 'https://eth.llamarpc.com'),
+  ('eip155:1', 'https://rpc.ankr.com/eth');
 SQL
 ```
+
+Admin API and admin UI accept Solana aliases like `solana:mainnet`, `solana:devnet`, and `solana:testnet`, but store them canonically as genesis-hash CAIP-2 identifiers.
 
 6. Start the witness service.
 
@@ -122,13 +128,19 @@ Witness endpoint example:
 curl http://localhost:3000/witness/eip155:1/19000000/0
 ```
 
+Solana witness endpoint example:
+
+```bash
+curl http://localhost:3000/witness/solana/solana:mainnet/5N6gWm8YvM4wM8rA3JQn8Y3eGk9n7fN1nTn9gB9tQY8c/0
+```
+
 Expected response states:
 
 - `{"status":"pending"}`: indexing job queued
 - `{"status":"indexing"}`: worker currently processing
 - `{"status":"ready","witness":{...}}`: witness proof/signature available
 - `{"status":"failed","error":"..."}`: job exhausted retries
-- `404 {"error":"Chain not configured"}` or `404 {"error":"Event not found at this logIndex"}`
+- `404 {"error":"Chain not configured"}`, `404 {"error":"Event not found at this logIndex"}`, or `404 {"error":"Event not found at this event index"}`
 
 Polling helper:
 
@@ -158,10 +170,11 @@ psql "$DATABASE_URL" -c "SELECT chain_id, block_number, log_index, tree_index, l
 
 - `Missing required environment variable: ...`: set required role env vars (`DATABASE_URL`, and either `WITNESS_PRIVATE_KEY` or `WITNESS_SIGNER_ADDRESS`).
 - `WITNESS_PRIVATE_KEY must be a 32-byte hex-encoded private key`: key must be exactly 64 hex chars (optional `0x` prefix).
-- `Chain not configured`: add a matching row in `chains` for requested CAIP-2 chain.
+- `Chain not configured`: add a matching row in `chains` for the requested CAIP-2 chain. Solana aliases are normalized to canonical genesis-hash CAIP-2 values before storage.
 - `Chain X has only Y RPC(s). At least 2 required.`: add at least one more RPC URL for that chain in `rpcs`.
-- Request stays `pending`/`indexing`: verify RPC URLs are reachable and return consistent block/log data.
+- Request stays `pending`/`indexing`: verify RPC URLs are reachable and return consistent block or slot data.
 - `Event not found at this logIndex`: block indexed successfully but that log index does not exist in the block.
+- `Event not found at this event index`: slot indexed successfully but that transaction-local Solana event index does not exist.
 
 ## Security Notes
 

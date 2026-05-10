@@ -1,5 +1,10 @@
 import { type Address, type Hex, createPublicClient, http } from "viem";
-import type { VowResult } from "./types.js";
+import type {
+  DecodedEthereumEvent,
+  DecodedSolanaEvent,
+  DemoSourceMode,
+  ProcessVowResult,
+} from "./types.js";
 
 const WITNESS_DIRECTORY_ABI = [
   {
@@ -35,8 +40,28 @@ const MOCK_VOW_LIB_ABI = [
     outputs: [
       { name: "chainId", type: "uint256" },
       { name: "rootBlockNumber", type: "uint256" },
+      { name: "evt", type: "bytes" },
+    ],
+  },
+  {
+    name: "decodeEvent",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "evt", type: "bytes" }],
+    outputs: [
       { name: "emitter", type: "address" },
       { name: "topics", type: "bytes32[]" },
+      { name: "data", type: "bytes" },
+    ],
+  },
+  {
+    name: "decodeEmitCPI",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "evt", type: "bytes" }],
+    outputs: [
+      { name: "programId", type: "bytes32" },
+      { name: "discriminator", type: "bytes8" },
       { name: "data", type: "bytes" },
     ],
   },
@@ -63,7 +88,7 @@ export async function callProcessVow(
   mockVowLibAddress: Address,
   directoryAddress: Address,
   vowBytes: Hex
-): Promise<{ vowResult: VowResult; gasEstimate: bigint }> {
+): Promise<{ processVowResult: ProcessVowResult; gasEstimate: bigint }> {
   const client = createPublicClient({ transport: http(rpcUrl) });
 
   const args = [directoryAddress, vowBytes] as const;
@@ -82,16 +107,48 @@ export async function callProcessVow(
     }),
   ]);
 
-  const [chainId, rootBlockNumber, emitter, topics, data] = result;
+  const [chainId, rootBlockNumber, evt] = result;
 
   return {
-    vowResult: {
+    processVowResult: {
       chainId,
       rootBlockNumber,
+      evt: evt as Hex,
+    },
+    gasEstimate,
+  };
+}
+
+export async function decodeVowEvent(
+  rpcUrl: string,
+  mockVowLibAddress: Address,
+  mode: DemoSourceMode,
+  evt: Hex
+): Promise<DecodedEthereumEvent | DecodedSolanaEvent> {
+  const client = createPublicClient({ transport: http(rpcUrl) });
+  if (mode === "ethereum") {
+    const [emitter, topics, data] = await client.readContract({
+      address: mockVowLibAddress,
+      abi: MOCK_VOW_LIB_ABI,
+      functionName: "decodeEvent",
+      args: [evt],
+    });
+    return {
       emitter: emitter as Address,
       topics: topics as Hex[],
       data: data as Hex,
-    },
-    gasEstimate,
+    };
+  }
+
+  const [programId, discriminator, data] = await client.readContract({
+    address: mockVowLibAddress,
+    abi: MOCK_VOW_LIB_ABI,
+    functionName: "decodeEmitCPI",
+    args: [evt],
+  });
+  return {
+    programId: programId as Hex,
+    discriminator: discriminator as Hex,
+    data: data as Hex,
   };
 }

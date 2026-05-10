@@ -29,6 +29,12 @@ contract MockEvent {
     (emitter, topics, data) = VowLib.decodeEvent(evt);
   }
 
+  function decodeEmitCPI(
+    bytes calldata evt
+  ) external pure returns (bytes32 programId, bytes8 discriminator, bytes calldata data) {
+    (programId, discriminator, data) = VowLib.decodeEmitCPI(evt);
+  }
+
   function leafHash(
     bytes calldata dat
   ) external pure returns (bytes32) {
@@ -45,17 +51,7 @@ contract MockEvent {
   function processVow(
     address directry,
     bytes calldata vow
-  )
-    external
-    view
-    returns (
-      uint256 chainId,
-      uint256 rootBlockNumber,
-      address emitter,
-      bytes32[] calldata topics,
-      bytes calldata data
-    )
-  {
+  ) external view returns (uint256 chainId, uint256 rootBlockNumber, bytes calldata evt) {
     return VowLib.processVow(directry, vow);
   }
 
@@ -343,6 +339,20 @@ contract EventLibTest is Test {
     assertEq(ct, decodedTopics);
     assertEq(data, decodedData);
   }
+
+  function test_emitCpi_decode_roundtrip(
+    bytes32 programId,
+    bytes8 discriminator,
+    bytes calldata data
+  ) external {
+    bytes memory evt = abi.encodePacked(programId, discriminator, data);
+
+    (bytes32 decodedProgramId, bytes8 decodedDiscriminator, bytes memory decodedData) = v.decodeEmitCPI(evt);
+
+    assertEq(programId, decodedProgramId);
+    assertEq(discriminator, decodedDiscriminator);
+    assertEq(data, decodedData);
+  }
 }
 
 contract VowLibFindingsTest is Test {
@@ -388,19 +398,15 @@ contract VowLibFindingsTest is Test {
     uint8[] memory signerIndices = new uint8[](1);
     signerIndices[0] = 1;
 
-    bytes memory vow =
-      v.encodeVowExternal(chainId, rootBlockNumber, proof, signerIndices, signatures, evt);
+    bytes memory vow = v.encodeVowExternal(chainId, rootBlockNumber, proof, signerIndices, signatures, evt);
 
-    (
-      uint256 gotChainId,
-      uint256 gotRootBlockNumber,
-      address emitter,
-      bytes32[] memory gotTopics,
-      bytes memory gotData
-    ) = v.processVow(address(directory), vow);
+    (uint256 gotChainId, uint256 gotRootBlockNumber, bytes memory gotEvt) = v.processVow(address(directory), vow);
+
+    (address emitter, bytes32[] memory gotTopics, bytes memory gotData) = v.decodeEvent(gotEvt);
 
     assertEq(gotChainId, chainId);
     assertEq(gotRootBlockNumber, rootBlockNumber);
+    assertEq(gotEvt, evt);
     assertEq(emitter, address(0xBEEF));
     assertEq(gotTopics, topics);
     assertEq(gotData, eventData);
@@ -420,5 +426,12 @@ contract VowLibFindingsTest is Test {
 
     vm.expectRevert(abi.encodeWithSelector(VowLib.TooManyTopics.selector));
     v.decodeEvent(evt);
+  }
+
+  function test_revertIf_decodeEmitCPI_event_shorter_than_header() external {
+    bytes memory evt = abi.encodePacked(bytes32(uint256(1)), bytes7(0));
+
+    vm.expectRevert(abi.encodeWithSelector(VowLib.InvalidEmitCPI.selector));
+    v.decodeEmitCPI(evt);
   }
 }
