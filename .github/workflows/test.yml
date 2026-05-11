@@ -30,6 +30,7 @@ jobs:
         id: fmt
 
       - name: Run Forge build
+        working-directory: solidity
         run: |
           forge build --sizes
         id: build
@@ -71,6 +72,7 @@ jobs:
 
 
       - name: Run Forge build
+        working-directory: solidity
         run: |
           forge build
       - name: Install dependencies
