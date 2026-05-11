@@ -16,6 +16,7 @@ import { MockVowLib } from "../src/mocks/MockVowLib.sol";
  *   SIGNER_ADDRESS   — address to register as the first signer (default: deployer)
  *   SIGNER_INDEX     — uint8 index for that signer               (default: 1)
  *   QUORUM           — minimum signers required                   (default: 1)
+ *   EXPIRY           — uint40 expiry for the signer (default: 0xFFFFFFFFFF = unlimited)
  *   REGISTER_SIGNER  — set to "false" to skip signer registration (default: true)
  *   OUTPUT_FILE      — path to write deployed addresses as JSON   (default: none)
  *
@@ -38,6 +39,7 @@ contract Deploy is Script {
 
     uint256 signerIndex = vm.envOr("SIGNER_INDEX", uint256(1));
     uint256 quorum = vm.envOr("QUORUM", uint256(1));
+    uint40 expiry = uint40(vm.envOr("EXPIRY", uint256(type(uint40).max)));
 
     vm.startBroadcast();
 
@@ -52,7 +54,7 @@ contract Deploy is Script {
     // ── Setup ─────────────────────────────────────────────────────────────────
 
     if (registerSigner) {
-      directory.setSigner(signerAddress, signerIndex, quorum);
+      directory.setSigner(signerAddress, signerIndex, expiry, quorum);
     }
 
     vm.stopBroadcast();
@@ -65,6 +67,7 @@ contract Deploy is Script {
     if (registerSigner) {
       console.log("Signer           :", signerAddress);
       console.log("Signer index     :", signerIndex);
+      console.log("Expiry           :", expiry);
       console.log("Quorum           :", quorum);
     }
 

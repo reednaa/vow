@@ -42,7 +42,7 @@ contract GasEstimateTest is Test {
 
     // Default directory has only signer1, quorum=1 (used by 1-signer tests).
     directory = new WitnessDirectory(address(this));
-    directory.setSigner(signer1, 1, 1);
+    directory.setSigner(signer1, 1, type(uint40).max, 1);
 
     // Build a realistic event: Transfer(from, to, amount)
     bytes32[] memory topics = new bytes32[](3);
@@ -178,8 +178,8 @@ contract GasEstimateTest is Test {
   function test_gas_2signers_depth0() external {
     // Need quorum=2 — re-initialise directory
     directory = new WitnessDirectory(address(this));
-    directory.setSigner(signer1, 1, 1);
-    directory.setSigner(signer2, 2, 2); // setSigner updates quorum; final quorum = 2
+    directory.setSigner(signer1, 1, type(uint40).max, 1);
+    directory.setSigner(signer2, 2, type(uint40).max, 2); // setSigner updates quorum; final quorum = 2
 
     (bytes32[] memory proof, bytes32 root) = _buildProofAndRoot(0);
     bytes[] memory sigs = new bytes[](2);
@@ -202,8 +202,8 @@ contract GasEstimateTest is Test {
   // ─────────────────────────────────────────────────────────────────────────
   function test_gas_2signers_depth10() external {
     directory = new WitnessDirectory(address(this));
-    directory.setSigner(signer1, 1, 1);
-    directory.setSigner(signer2, 2, 2);
+    directory.setSigner(signer1, 1, type(uint40).max, 1);
+    directory.setSigner(signer2, 2, type(uint40).max, 2);
 
     (bytes32[] memory proof, bytes32 root) = _buildProofAndRoot(10);
     bytes[] memory sigs = new bytes[](2);

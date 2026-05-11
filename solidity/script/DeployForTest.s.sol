@@ -13,7 +13,7 @@ contract DeployForTest is Script {
 
     WitnessDirectory directory = new WitnessDirectory(msg.sender);
     // Register the broadcaster (Anvil key #0) as signer at index 1, quorum 1
-    directory.setSigner(msg.sender, 1, 1);
+    directory.setSigner(msg.sender, 1, type(uint40).max, 1);
 
     MockVowLib mockVowLib = new MockVowLib();
     TestEmitter testEmitter = new TestEmitter();

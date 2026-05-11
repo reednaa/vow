@@ -371,8 +371,8 @@ contract VowLibFindingsTest is Test {
     secondSigner = address(0xC0FFEE);
 
     // Seed the directory with deterministic test witnesses.
-    directory.setSigner(signer, 1, 1);
-    directory.setSigner(secondSigner, 2, 1);
+    directory.setSigner(signer, 1, type(uint40).max, 1);
+    directory.setSigner(secondSigner, 2, type(uint40).max, 1);
   }
 
   uint256 constant CHAIN_ID_TEST = 10;
