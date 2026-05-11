@@ -32,12 +32,18 @@ async function main() {
       healthServer.stop();
     } catch {}
 
+    const timeout = setTimeout(() => {
+      console.error("Worker graceful shutdown timeout exceeded");
+      process.exit(1);
+    }, 30_000);
+
     try {
       await worker.stop();
     } catch (error) {
       console.error("Worker stop error:", error);
     }
 
+    clearTimeout(timeout);
     await closeDb();
     await shutdownTelemetry();
     process.exit(0);

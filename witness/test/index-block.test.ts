@@ -226,7 +226,6 @@ describe("index-block task", () => {
     expect(addJobCalls).toHaveLength(1);
     expect(addJobCalls[0]!.name).toBe("index-block");
     expect(addJobCalls[0]!.payload).toEqual({ chainId: TEST_CHAIN_ID, blockNumber });
-    expect(addJobCalls[0]!.opts.jobKey).toBe(`index:${TEST_CHAIN_ID}:${blockNumber}`);
     expect(addJobCalls[0]!.opts.runAt).toBeInstanceOf(Date);
   });
 

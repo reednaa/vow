@@ -90,10 +90,7 @@ export function createIndexBlockTask(
             await helpers.addJob(
               INDEX_BLOCK_TASK,
               { chainId, blockNumber },
-              {
-                jobKey: `index:${chainId}:${blockNumber}`,
-                runAt: new Date(Date.now() + 30_000),
-              }
+              { runAt: new Date(Date.now() + 30_000) },
             );
             return;
           }
@@ -109,10 +106,7 @@ export function createIndexBlockTask(
             await helpers.addJob(
               INDEX_BLOCK_TASK,
               { chainId, blockNumber },
-              {
-                jobKey: `index:${chainId}:${blockNumber}`,
-                runAt: new Date(Date.now() + delayMs),
-              }
+              { runAt: new Date(Date.now() + delayMs) },
             );
             return;
           }

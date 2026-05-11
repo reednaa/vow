@@ -95,10 +95,7 @@ export function createIndexSolanaSlotTask(
             await helpers.addJob(
               INDEX_SOLANA_SLOT_TASK,
               { chainId, slot },
-              {
-                jobKey: `solana-index:${chainId}:${slot}`,
-                runAt: new Date(Date.now() + 30_000),
-              },
+              { runAt: new Date(Date.now() + 30_000) },
             );
             return;
           }
@@ -114,10 +111,7 @@ export function createIndexSolanaSlotTask(
             await helpers.addJob(
               INDEX_SOLANA_SLOT_TASK,
               { chainId, slot },
-              {
-                jobKey: `solana-index:${chainId}:${slot}`,
-                runAt: new Date(Date.now() + delayMs),
-              },
+              { runAt: new Date(Date.now() + delayMs) },
             );
             return;
           }
