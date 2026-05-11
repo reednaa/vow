@@ -21,8 +21,8 @@ import {
 } from "../src/core/solana-encoding";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
-const TEST_CHAIN_ID = normalizeChainId("solana:mainnet");
-const TEST_CHAIN_ALIAS = "solana:mainnet";
+const TEST_CHAIN_ID = "solana:4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi";
+const TEST_CHAIN_ALIAS = TEST_CHAIN_ID;
 const RPC_URL = "http://stub.solana.rpc";
 const SIGNER_KEY =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -245,6 +245,7 @@ describe("GET /witness/solana", () => {
         spec: {
           jobKey: `solana-index:${TEST_CHAIN_ID}:${Number(slot)}`,
           maxAttempts: 5,
+          priority: 0,
         },
       },
     ]);

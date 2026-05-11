@@ -8,10 +8,10 @@ import { createWorkerHealthServer } from "../api/health.server.ts";
 async function main() {
   initTelemetry();
   const config = loadWorkerConfig();
-  let ready = false;
-  const healthServer = createWorkerHealthServer(config.workerHealthPort, () => ready);
-  const signer = createEnvSigner(config.witnessPrivateKey);
   const db = createDb(config.databaseUrl);
+  let ready = false;
+  const healthServer = createWorkerHealthServer(config.workerHealthPort, () => ready, db);
+  const signer = createEnvSigner(config.witnessPrivateKey);
   const worker = await setupWorker({
     databaseUrl: config.databaseUrl,
     signer,

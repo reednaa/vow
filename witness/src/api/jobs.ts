@@ -53,6 +53,11 @@ export async function findIndexingStatus(
   }
 }
 
+export type EnqueueResult = {
+  result: IndexingStatus;
+  created: boolean;
+};
+
 export async function enqueueIndexingJob(options: {
   db: Db;
   addJob: AddJobFn;
@@ -61,18 +66,23 @@ export async function enqueueIndexingJob(options: {
   jobKey: string;
   maxAttempts: number;
   failureMessage: string;
-}): Promise<IndexingStatus> {
+  priority?: number;
+}): Promise<EnqueueResult> {
   const existingStatus = await findIndexingStatus(
     options.db,
     options.jobKey,
     options.failureMessage,
   );
-  if (existingStatus) return existingStatus;
+  if (existingStatus) return { result: existingStatus, created: false };
 
   await options.addJob(
     options.identifier,
     options.payload,
-    { jobKey: options.jobKey, maxAttempts: options.maxAttempts },
+    {
+      jobKey: options.jobKey,
+      maxAttempts: options.maxAttempts,
+      priority: options.priority ?? 0,
+    },
   );
-  return { status: "pending" };
+  return { result: { status: "pending" }, created: true };
 }

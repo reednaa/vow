@@ -15,6 +15,20 @@
       "when": 1778400112915,
       "tag": "0001_majestic_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778445982259,
+      "tag": "0002_colossal_makkari",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778446833216,
+      "tag": "0003_cynical_nick_fury",
+      "breakpoints": true
     }
   ]
 }

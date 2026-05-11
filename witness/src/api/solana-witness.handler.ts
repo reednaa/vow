@@ -10,6 +10,8 @@ import { createSolanaRpcClient } from "../rpc/solana-client.ts";
 import { solanaWitnessParams, solanaWitnessResponse } from "./model.ts";
 import { buildStoredEventProof, recoverVowSigner } from "./proof.ts";
 import { type AddJobFn, enqueueIndexingJob } from "./jobs.ts";
+import { type ApiKeyContext } from "./api-key.middleware.ts";
+import { trackUsage } from "./usage-tracker.ts";
 
 export function createSolanaWitnessController(
   db: Db,
@@ -18,7 +20,14 @@ export function createSolanaWitnessController(
 ) {
   return new Elysia().get(
     "/witness/solana/:caip2ChainId/:txSignature/:index",
-    async ({ params, set }) => {
+    async ({ params, set, apiKey }: any) => {
+      const ak = apiKey as ApiKeyContext | undefined;
+      const keyId: number | null = ak?.apiKeyId ?? null;
+      if (keyId === -1) {
+        set.status = 401;
+        return { error: "Invalid API key", code: "invalid_api_key" };
+      }
+
       const { caip2ChainId, txSignature, index } = params;
 
       let chainId: string;
@@ -26,6 +35,7 @@ export function createSolanaWitnessController(
         chainId = normalizeChainId(caip2ChainId);
       } catch {
         set.status = 404;
+        trackUsage(db, keyId, "status");
         return { error: "Invalid chain identifier" };
       }
 
@@ -37,6 +47,7 @@ export function createSolanaWitnessController(
 
       if (!chain) {
         set.status = 404;
+        trackUsage(db, keyId, "status");
         return { error: "Chain not configured" };
       }
 
@@ -66,6 +77,7 @@ export function createSolanaWitnessController(
 
         if (!slot) {
           set.status = 404;
+          trackUsage(db, keyId, "status");
           return { error: "Indexed slot not found" };
         }
 
@@ -82,6 +94,7 @@ export function createSolanaWitnessController(
         const event = allEvents.find(e => e.eventIndexLocal === Number(index));
         if (!event) {
           set.status = 404;
+          trackUsage(db, keyId, "status");
           return { error: "Event not found" };
         }
 
@@ -113,6 +126,8 @@ export function createSolanaWitnessController(
         console.log(
           `[solana-witness] ready chain=${chainId} tx=${txSignature} index=${index} signerConfigured=${witnessSigner} signerRecovered=${signatureSigner}`,
         );
+
+        trackUsage(db, keyId, "hot");
 
         return {
           status: "ready" as const,
@@ -155,6 +170,7 @@ export function createSolanaWitnessController(
 
       if (resolvedSlot === null) {
         set.status = 404;
+        trackUsage(db, keyId, "status");
         return { error: "Transaction not found" };
       }
 
@@ -171,11 +187,12 @@ export function createSolanaWitnessController(
 
       if (indexedSlot) {
         set.status = 404;
+        trackUsage(db, keyId, "status");
         return { error: "Event not found at this event index" };
       }
 
       const jobKey = `solana-index:${chainId}:${slotNum}`;
-      return enqueueIndexingJob({
+      const { result, created } = await enqueueIndexingJob({
         db,
         addJob,
         identifier: INDEX_SOLANA_SLOT_TASK,
@@ -183,9 +200,22 @@ export function createSolanaWitnessController(
         jobKey,
         maxAttempts: 5,
         failureMessage: "Slot indexing failed after max retries",
+        priority: keyId ? -1 : 0,
       });
+      trackUsage(db, keyId, created ? "cold" : "status");
+      return result;
     },
-    { params: solanaWitnessParams, response: solanaWitnessResponse },
+    {
+      params: solanaWitnessParams,
+      response: solanaWitnessResponse,
+      detail: {
+        tags: ["Solana Witness"],
+        summary: "Get Solana event witness",
+        description:
+          "Returns a signed witness payload with Merkle proof for a Solana CPI event identified by chain, transaction signature, and event index. " +
+          "If the slot hasn't been indexed yet, returns a pending/indexing status and enqueues background indexing.",
+      },
+    },
   );
 }
 

@@ -36,11 +36,20 @@ export function createAuthHandler(passwordHash: string, jwtSecret: string) {
           set.status = 401;
           return { error: "Invalid password" };
         }
+        const forwardedProto = request.headers
+          .get("x-forwarded-proto")
+          ?.split(",")[0]
+          ?.trim()
+          ?.toLowerCase();
+        const isSecure = forwardedProto
+          ? forwardedProto === "https"
+          : request.url.startsWith("https://");
+
         adminToken?.set({
           value: await jwt.sign({ sub: "admin" }),
           httpOnly: true,
           sameSite: "strict",
-          secure: process.env.NODE_ENV !== "development",
+          secure: isSecure,
           path: "/",
           maxAge: 86400,
         });

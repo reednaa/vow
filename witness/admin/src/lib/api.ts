@@ -1,6 +1,7 @@
 export interface Chain {
   chainId: string;
   latestBlock: string | null;
+  confirmations: number;
   updatedAt: string;
   rpcCount: number;
 }
@@ -39,6 +40,37 @@ export interface Block {
   merkleRoot: string;
   latestBlockAtIndex: string;
   createdAt: string;
+}
+
+export interface ApiKey {
+  id: number;
+  name: string;
+  keyPrefix: string;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  todayUsage: { cold: number; hot: number; status: number };
+}
+
+export interface ApiKeyCreateResult {
+  id: number;
+  name: string;
+  key: string;
+  keyPrefix: string;
+  createdAt: string;
+}
+
+export interface ApiKeyUsageRow {
+  date: string;
+  coldRequests: number;
+  hotRequests: number;
+  statusRequests: number;
+}
+
+export interface ApiKeyUsageDetail {
+  key: { id: number; name: string; keyPrefix: string; isActive: boolean };
+  usage: ApiKeyUsageRow[];
 }
 
 class ApiError extends Error {
@@ -84,6 +116,11 @@ export const api = {
     req("/admin/api/chains", { method: "POST", body: JSON.stringify({ chainId }) }),
   deleteChain: (chainId: string) =>
     req(`/admin/api/chains/${chainId}`, { method: "DELETE" }),
+  updateChainConfirmations: (chainId: string, confirmations: number) =>
+    req(`/admin/api/chains/${chainId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ confirmations }),
+    }),
 
   getRpcs: (chainId: string) => req<Rpc[]>(`/admin/api/chains/${chainId}/rpcs`),
   addRpc: (chainId: string, url: string) =>
@@ -96,4 +133,18 @@ export const api = {
   getBlocks: (chainId: string) => req<Block[]>(`/admin/api/chains/${chainId}/blocks`),
 
   getJobs: () => req<Job[]>("/admin/api/jobs"),
+
+  createKey: (name: string) =>
+    req<ApiKeyCreateResult>("/admin/api/keys", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  getKeys: () => req<ApiKey[]>("/admin/api/keys"),
+
+  revokeKey: (id: number) =>
+    req<{ ok: boolean }>(`/admin/api/keys/${id}/revoke`, { method: "POST" }),
+
+  getKeyUsage: (id: number) =>
+    req<ApiKeyUsageDetail>(`/admin/api/keys/${id}/usage`),
 };

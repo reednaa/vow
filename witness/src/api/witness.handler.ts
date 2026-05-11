@@ -9,6 +9,8 @@ import { INDEX_BLOCK_TASK } from "../worker/index-block.task.ts";
 import { witnessParams, witnessResponse } from "./model.ts";
 import { buildStoredEventProof, recoverVowSigner } from "./proof.ts";
 import { type AddJobFn, enqueueIndexingJob } from "./jobs.ts";
+import { type ApiKeyContext } from "./api-key.middleware.ts";
+import { trackUsage } from "./usage-tracker.ts";
 
 export function createWitnessController(
   db: Db,
@@ -17,7 +19,14 @@ export function createWitnessController(
 ) {
   return new Elysia().get(
     "/witness/:caip2ChainId/:blockNumber/:logIndex",
-    async ({ params, set }) => {
+    async ({ params, set, apiKey }: any) => {
+      const ak = apiKey as ApiKeyContext | undefined;
+      const keyId: number | null = ak?.apiKeyId ?? null;
+      if (keyId === -1) {
+        set.status = 401;
+        return { error: "Invalid API key", code: "invalid_api_key" };
+      }
+
       const { caip2ChainId, blockNumber, logIndex } = params;
       const chainId = normalizeChainId(caip2ChainId);
       const blockNumberBigInt = BigInt(blockNumber);
@@ -30,6 +39,7 @@ export function createWitnessController(
 
       if (!chain) {
         set.status = 404;
+        trackUsage(db, keyId, "status");
         return { error: "Chain not configured" };
       }
 
@@ -84,6 +94,8 @@ export function createWitnessController(
           `[witness] ready chain=${chainId} block=${blockNumber} logIndex=${logIndex} signerConfigured=${witnessSigner} signerRecovered=${signatureSigner}`
         );
 
+        trackUsage(db, keyId, "hot");
+
         return {
           status: "ready" as const,
           witness: {
@@ -101,7 +113,7 @@ export function createWitnessController(
       }
 
       const jobKey = `index:${chainId}:${blockNumber}`;
-      return enqueueIndexingJob({
+      const { result, created } = await enqueueIndexingJob({
         db,
         addJob,
         identifier: INDEX_BLOCK_TASK,
@@ -109,9 +121,22 @@ export function createWitnessController(
         jobKey,
         maxAttempts: 5,
         failureMessage: "Block indexing failed after max retries",
+        priority: keyId ? -1 : 0,
       });
+      trackUsage(db, keyId, created ? "cold" : "status");
+      return result;
     },
-    { params: witnessParams, response: witnessResponse }
+    {
+      params: witnessParams,
+      response: witnessResponse,
+      detail: {
+        tags: ["Witness"],
+        summary: "Get EVM event witness",
+        description:
+          "Returns a signed witness payload with Merkle proof for an EVM event identified by chain, block number, and log index. " +
+          "If the block hasn't been indexed yet, returns a pending/indexing status and enqueues background indexing.",
+      },
+    }
   );
 }
 

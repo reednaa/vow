@@ -205,4 +205,85 @@ describe("index-block task", () => {
       );
     expect(events.length).toBe(3);
   });
+
+  it("re-enqueues when block is ahead of the tip (latestBlock < blockNumber)", async () => {
+    const signer = createEnvSigner(TEST_PRIVATE_KEY);
+    const blockNumber = 6000;
+    const mockResult = makeMockConsistentResult(blockNumber, MOCK_LOGS);
+    // Override latestBlock to be behind
+    const behindResult = { ...mockResult, latestBlock: BigInt(blockNumber - 5) };
+
+    const addJobCalls: any[] = [];
+    const helpers = {
+      addJob: async (name: string, payload: any, opts: any) => {
+        addJobCalls.push({ name, payload, opts });
+      },
+    };
+
+    const task = createIndexBlockTask(db, signer, async () => behindResult);
+    await task({ chainId: TEST_CHAIN_ID, blockNumber }, helpers as any);
+
+    expect(addJobCalls).toHaveLength(1);
+    expect(addJobCalls[0]!.name).toBe("index-block");
+    expect(addJobCalls[0]!.payload).toEqual({ chainId: TEST_CHAIN_ID, blockNumber });
+    expect(addJobCalls[0]!.opts.jobKey).toBe(`index:${TEST_CHAIN_ID}:${blockNumber}`);
+    expect(addJobCalls[0]!.opts.runAt).toBeInstanceOf(Date);
+  });
+
+  it("re-enqueues with delay when confirmations are insufficient", async () => {
+    const signer = createEnvSigner(TEST_PRIVATE_KEY);
+    const blockNumber = 7000;
+    const mockResult = makeMockConsistentResult(blockNumber, MOCK_LOGS);
+    // latestBlock is blockNumber + 5, but default confirmations is 12
+    const fewConfirmationsResult = { ...mockResult, latestBlock: BigInt(blockNumber + 5) };
+
+    const addJobCalls: any[] = [];
+    const helpers = {
+      addJob: async (name: string, payload: any, opts: any) => {
+        addJobCalls.push({ name, payload, opts });
+      },
+    };
+
+    const task = createIndexBlockTask(db, signer, async () => fewConfirmationsResult);
+    await task({ chainId: TEST_CHAIN_ID, blockNumber }, helpers as any);
+
+    expect(addJobCalls).toHaveLength(1);
+    expect(addJobCalls[0]!.name).toBe("index-block");
+    expect(addJobCalls[0]!.payload).toEqual({ chainId: TEST_CHAIN_ID, blockNumber });
+    expect(addJobCalls[0]!.opts.runAt).toBeInstanceOf(Date);
+
+    // remaining = 12 - 5 = 7, delay = 7 * 5000 = 35000ms
+    const expectedRunAt = Date.now() + 35000;
+    const actualRunAt = (addJobCalls[0]!.opts.runAt as Date).getTime();
+    expect(Math.abs(actualRunAt - expectedRunAt)).toBeLessThan(5000);
+  });
+
+  it("proceeds with indexing when confirmations are sufficient", async () => {
+    const signer = createEnvSigner(TEST_PRIVATE_KEY);
+    const blockNumber = 8000;
+    const mockResult = makeMockConsistentResult(blockNumber, MOCK_LOGS);
+
+    const addJobCalls: any[] = [];
+    const helpers = {
+      addJob: async () => { addJobCalls.push("should-not-be-called"); },
+    };
+
+    const task = createIndexBlockTask(db, signer, async () => mockResult);
+    await task({ chainId: TEST_CHAIN_ID, blockNumber }, helpers as any);
+
+    // Should not have re-enqueued
+    expect(addJobCalls).toHaveLength(0);
+
+    // Verify block was indexed
+    const [block] = await db
+      .select()
+      .from(indexedBlocks)
+      .where(
+        and(
+          eq(indexedBlocks.chainId, TEST_CHAIN_ID),
+          eq(indexedBlocks.blockNumber, BigInt(blockNumber))
+        )
+      );
+    expect(block).toBeTruthy();
+  });
 });

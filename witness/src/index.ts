@@ -29,7 +29,7 @@ async function main() {
     db,
   });
 
-  const healthServer = createHealthServer(config.healthPort);
+  const healthServer = createHealthServer(config.healthPort, db);
   const apiServer = createApiServer(
     config.apiPort,
     db,

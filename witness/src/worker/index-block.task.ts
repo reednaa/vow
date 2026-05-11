@@ -29,7 +29,7 @@ export function createIndexBlockTask(
   signer: Signer,
   fetchBlock?: FetchBlockFn
 ): Task {
-  return async (payload) => {
+  return async (payload, helpers) => {
     const { chainId, blockNumber } = payload as IndexBlockPayload;
     const blockNumberBigInt = BigInt(blockNumber);
 
@@ -72,6 +72,50 @@ export function createIndexBlockTask(
           console.log(
             `[index-block] ${elapsed()} block fetched blockHash=${consistent.blockHash} events=${consistent.events.length} latestBlock=${consistent.latestBlock}`
           );
+
+          // Finality check: block must have enough confirmations before signing.
+          // If not, re-enqueue with a delay instead of throwing — avoids maxAttempts
+          // exhaustion and wastes no RPC calls on immediate retries.
+          const [chainRow] = await db
+            .select({ confirmations: chains.confirmations })
+            .from(chains)
+            .where(eq(chains.chainId, chainId));
+
+          const requiredConfirmations = chainRow?.confirmations ?? 12;
+
+          if (consistent.latestBlock < blockNumberBigInt) {
+            console.log(
+              `[index-block] ${elapsed()} block ${blockNumber} ahead of tip ${consistent.latestBlock} — re-enqueuing in 30s`
+            );
+            await helpers.addJob(
+              INDEX_BLOCK_TASK,
+              { chainId, blockNumber },
+              {
+                jobKey: `index:${chainId}:${blockNumber}`,
+                runAt: new Date(Date.now() + 30_000),
+              }
+            );
+            return;
+          }
+
+          const confirmationsAchieved = consistent.latestBlock - blockNumberBigInt;
+
+          if (confirmationsAchieved < requiredConfirmations) {
+            const remaining = requiredConfirmations - Number(confirmationsAchieved);
+            const delayMs = Math.min(remaining * 5_000, 120_000);
+            console.log(
+              `[index-block] ${elapsed()} block ${blockNumber} has ${confirmationsAchieved}/${requiredConfirmations} confirmations — re-enqueuing in ${delayMs}ms`
+            );
+            await helpers.addJob(
+              INDEX_BLOCK_TASK,
+              { chainId, blockNumber },
+              {
+                jobKey: `index:${chainId}:${blockNumber}`,
+                runAt: new Date(Date.now() + delayMs),
+              }
+            );
+            return;
+          }
 
           // Handle empty block
           if (consistent.events.length === 0) {

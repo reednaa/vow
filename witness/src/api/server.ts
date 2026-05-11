@@ -1,7 +1,10 @@
 import { Elysia } from "elysia";
+import swagger from "@elysiajs/swagger";
 import { mountWitnessHandler } from "./witness.handler.ts";
 import { mountSolanaWitnessHandler } from "./solana-witness.handler.ts";
 import { createAdminHandler } from "./admin/index.ts";
+import { mountChainsHandler } from "./chains.handler.ts";
+import { createApiKeyDerive } from "./api-key.middleware.ts";
 import type { Db } from "../db/client.ts";
 import type { AddJobFn } from "./jobs.ts";
 
@@ -25,6 +28,36 @@ export function createApiServer(
   adminJwtSecret: string | null = null
 ) {
   const app = new Elysia()
+    .use(
+      swagger({
+        path: "/docs",
+        exclude: /^\/admin/,
+        documentation: {
+          info: {
+            title: "Vow Witness API",
+            version: "1.0.0",
+            description:
+              "EVM and Solana event attestation service. " +
+              "Indexes block logs and CPI events, builds Merkle trees over canonical event encodings, " +
+              "signs the root, and serves event-level witness payloads with verifiable Merkle proofs.",
+          },
+          tags: [
+            {
+              name: "Witness",
+              description: "Retrieve signed witness payloads with Merkle proofs for indexed EVM events",
+            },
+            {
+              name: "Solana Witness",
+              description: "Retrieve signed witness payloads with Merkle proofs for indexed Solana CPI events",
+            },
+            {
+              name: "Chains",
+              description: "List and inspect supported chains",
+            },
+          ],
+        },
+      })
+    )
     .onRequest(({ request, set }) => {
       applyCorsHeaders(request, set as { headers: Record<string, string> });
       if (request.method === "OPTIONS") {
@@ -39,10 +72,12 @@ export function createApiServer(
       }
       set.status = 500;
       return { error: String(error) };
-    });
+    })
+    .derive(createApiKeyDerive(db));
 
   mountWitnessHandler(app, db, addJob, witnessSigner);
   mountSolanaWitnessHandler(app, db, addJob, witnessSigner);
+  mountChainsHandler(app, db);
   app.use(createAdminHandler(db, adminPasswordHash, adminJwtSecret));
 
   app.listen(port);

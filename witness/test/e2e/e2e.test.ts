@@ -237,7 +237,7 @@ beforeAll(async () => {
   await db.delete(rpcs).where(eq(rpcs.chainId, TEST_CHAIN_ID));
   await db.delete(chains).where(eq(chains.chainId, TEST_CHAIN_ID));
 
-  await db.insert(chains).values({ chainId: TEST_CHAIN_ID });
+  await db.insert(chains).values({ chainId: TEST_CHAIN_ID, confirmations: 1 });
   // Two RPC rows required by index-block task (both pointing to the same local anvil)
   await db.insert(rpcs).values([
     { chainId: TEST_CHAIN_ID, url: TEST_RPC_URL },

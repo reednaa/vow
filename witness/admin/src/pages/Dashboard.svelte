@@ -7,6 +7,8 @@
   let chains: Chain[] = [];
   let loading = true;
   let error = "";
+  let chainError = "";
+  let chainsLoaded = false;
 
   // Add chain form
   let newChainId = "";
@@ -19,14 +21,37 @@
   async function load() {
     loading = true;
     error = "";
-    try {
-      [stats, chains] = await Promise.all([api.getStats(), api.getChains()]);
-    } catch (e: any) {
-      if (api.isUnauthorized(e)) return;
-      error = e.message;
-    } finally {
-      loading = false;
+    chainError = "";
+    chainsLoaded = false;
+
+    const [statsResult, chainsResult] = await Promise.allSettled([
+      api.getStats(),
+      api.getChains(),
+    ]);
+
+    if (statsResult.status === "rejected") {
+      if (api.isUnauthorized(statsResult.reason)) {
+        loading = false;
+        return;
+      }
+      error = statsResult.reason.message;
+    } else {
+      stats = statsResult.value;
     }
+
+    if (chainsResult.status === "rejected") {
+      if (api.isUnauthorized(chainsResult.reason)) {
+        loading = false;
+        return;
+      }
+      chainError = chainsResult.reason.message;
+      error = error || chainError;
+    } else {
+      chains = chainsResult.value;
+      chainsLoaded = true;
+    }
+
+    loading = false;
   }
 
   async function addChain() {
@@ -133,7 +158,9 @@
         Refresh
       </button>
     </div>
-    {#if !loading && chains.length === 0}
+    {#if !loading && chainError}
+      <div class="alert alert-error">Unable to load configured chains: {chainError}</div>
+    {:else if !loading && chainsLoaded && chains.length === 0}
       <div class="empty">No chains configured yet.</div>
     {:else}
       <table>
@@ -141,6 +168,7 @@
           <tr>
             <th>Chain ID</th>
             <th>Latest Indexed Block</th>
+            <th>Confirmations</th>
             <th>RPCs</th>
             <th></th>
           </tr>
@@ -154,6 +182,7 @@
                 </a>
               </td>
               <td class="mono">{chain.latestBlock ?? "—"}</td>
+              <td class="mono">{chain.confirmations}</td>
               <td>
                 <span style="color: {chain.rpcCount < 2 ? 'var(--warning)' : 'inherit'}">
                   {chain.rpcCount}

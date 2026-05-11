@@ -18,7 +18,7 @@ async function main() {
     config.adminPasswordHash,
     config.adminJwtSecret
   );
-  const healthServer = createHealthServer(config.healthPort);
+  const healthServer = createHealthServer(config.healthPort, db);
 
   console.log("Witness API started on port", config.apiPort);
 

@@ -1,0 +1,1 @@
+ALTER TABLE "chains" ADD COLUMN "confirmations" integer DEFAULT 12 NOT NULL;

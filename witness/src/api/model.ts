@@ -35,9 +35,11 @@ const witnessStatusOnly = t.Union([
 ]);
 
 const witnessError = t.Object({ error: t.String() });
+const witnessInvalidKey = t.Object({ error: t.String(), code: t.Literal("invalid_api_key") });
 
 export const witnessResponse = {
   200: t.Union([witnessReady, witnessStatusOnly]),
+  401: witnessInvalidKey,
   404: witnessError,
 };
 
@@ -72,6 +74,7 @@ export const solanaWitnessParams = t.Object({
 
 export const solanaWitnessResponse = {
   200: t.Union([solanaWitnessReady, witnessStatusOnly]),
+  401: witnessInvalidKey,
   404: witnessError,
 };
 

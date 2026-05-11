@@ -17,6 +17,8 @@ import {
 import type { Db } from "../../db/client.ts";
 import { normalizeChainId } from "../../core/chain-utils.ts";
 import { createSolanaRpcClient } from "../../rpc/solana-client.ts";
+import { createApiKeyRoutes } from "./keys.ts";
+import { getSolanaLatestSlots } from "../../db/queries.ts";
 
 async function validateRpc(
   url: string,
@@ -52,12 +54,14 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
 
     // ── Stats ─────────────────────────────────────────────────────────────────
     .get("/stats", async () => {
-      const [chainCounts, rpcCounts, blockCounts, eventCounts, jobStats] =
+      const [chainCounts, rpcCounts, blockCounts, eventCounts, solanaSlotCounts, solanaEventCounts, jobStats] =
         await Promise.all([
           db.select({ count: count() }).from(chains),
           db.select({ count: count() }).from(rpcs),
           db.select({ count: count() }).from(indexedBlocks),
           db.select({ count: count() }).from(indexedEvents),
+          db.select({ count: count() }).from(solanaIndexedSlots),
+          db.select({ count: count() }).from(solanaIndexedEvents),
           db
             .select({
               pending: sql<number>`count(*) filter (
@@ -76,8 +80,8 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
 
       const chainCount = chainCounts[0]?.count ?? 0;
       const rpcCount = rpcCounts[0]?.count ?? 0;
-      const blockCount = blockCounts[0]?.count ?? 0;
-      const eventCount = eventCounts[0]?.count ?? 0;
+      const blockCount = (blockCounts[0]?.count ?? 0) + (solanaSlotCounts[0]?.count ?? 0);
+      const eventCount = (eventCounts[0]?.count ?? 0) + (solanaEventCounts[0]?.count ?? 0);
 
       return {
         chains: Number(chainCount),
@@ -98,17 +102,25 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
         .select({
           chainId: chains.chainId,
           latestBlock: chains.latestBlock,
+          confirmations: chains.confirmations,
           updatedAt: chains.updatedAt,
           rpcCount: count(rpcs.id),
         })
         .from(chains)
         .leftJoin(rpcs, eq(rpcs.chainId, chains.chainId))
-        .groupBy(chains.chainId, chains.latestBlock, chains.updatedAt)
+        .groupBy(chains.chainId, chains.latestBlock, chains.confirmations, chains.updatedAt)
         .orderBy(chains.chainId);
+
+      const solanaChainIds = rows
+        .filter((r) => r.chainId.startsWith("solana:"))
+        .map((r) => r.chainId);
+
+      const solanaLatest = await getSolanaLatestSlots(db, solanaChainIds);
 
       return rows.map((r: any) => ({
         ...r,
-        latestBlock: r.latestBlock?.toString() ?? null,
+        latestBlock:
+          solanaLatest.get(r.chainId)?.toString() ?? r.latestBlock?.toString() ?? null,
       }));
     })
     .post(
@@ -129,10 +141,18 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
           set.status = 409;
           return { error: `Chain ${chainId} already configured` };
         }
-        await db.insert(chains).values({ chainId });
+        await db.insert(chains).values({
+          chainId,
+          confirmations: body.confirmations ?? 12,
+        });
         return { ok: true, chainId };
       },
-      { body: t.Object({ chainId: t.String({ pattern: "^(eip155:\\d+|solana:.+)$" }) }) }
+      {
+        body: t.Object({
+          chainId: t.String({ pattern: "^(eip155:\\d+|solana:.+)$" }),
+          confirmations: t.Optional(t.Numeric({ minimum: 0 })),
+        }),
+      }
     )
     .delete("/chains/:chainId", async ({ params, set }) => {
       let chainId: string;
@@ -160,6 +180,32 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
       });
       return { ok: true };
     })
+    .patch(
+      "/chains/:chainId",
+      async ({ params, body, set }) => {
+        let chainId: string;
+        try {
+          chainId = normalizeChainId(params.chainId);
+        } catch {
+          set.status = 400;
+          return { error: "Invalid chain ID" };
+        }
+        const [chain] = await db
+          .select()
+          .from(chains)
+          .where(eq(chains.chainId, chainId));
+        if (!chain) {
+          set.status = 404;
+          return { error: "Chain not found" };
+        }
+        await db
+          .update(chains)
+          .set({ confirmations: body.confirmations })
+          .where(eq(chains.chainId, chainId));
+        return { ok: true, chainId, confirmations: body.confirmations };
+      },
+      { body: t.Object({ confirmations: t.Numeric({ minimum: 0 }) }) }
+    )
 
     // ── RPCs ──────────────────────────────────────────────────────────────────
     .get("/chains/:chainId/rpcs", async ({ params, set }) => {
@@ -278,6 +324,30 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
         set.status = 404;
         return { error: "Chain not found" };
       }
+
+      const isSolana = chainId.startsWith("solana:");
+
+      if (isSolana) {
+        const slots = await db
+          .select({
+            blockNumber: solanaIndexedSlots.slot,
+            blockHash: solanaIndexedSlots.blockhash,
+            merkleRoot: solanaIndexedSlots.merkleRoot,
+            latestBlockAtIndex: solanaIndexedSlots.latestSlotAtIndex,
+            createdAt: solanaIndexedSlots.createdAt,
+          })
+          .from(solanaIndexedSlots)
+          .where(eq(solanaIndexedSlots.chainId, chainId))
+          .orderBy(desc(solanaIndexedSlots.slot))
+          .limit(50);
+
+        return slots.map((s: any) => ({
+          ...s,
+          blockNumber: s.blockNumber.toString(),
+          latestBlockAtIndex: s.latestBlockAtIndex.toString(),
+        }));
+      }
+
       const blocks = await db
         .select({
           blockNumber: indexedBlocks.blockNumber,
@@ -296,5 +366,8 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
         blockNumber: b.blockNumber.toString(),
         latestBlockAtIndex: b.latestBlockAtIndex.toString(),
       }));
-    });
+    })
+
+    // ── API Keys ─────────────────────────────────────────────────────────────
+    .use(createApiKeyRoutes(db));
 }

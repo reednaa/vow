@@ -1,8 +1,9 @@
-import { pgTable, integer, bigint, text, timestamp, serial, primaryKey, index } from "drizzle-orm/pg-core";
+import { pgTable, integer, bigint, text, timestamp, serial, boolean, unique, primaryKey, index } from "drizzle-orm/pg-core";
 
 export const chains = pgTable("chains", {
   chainId: text("chain_id").primaryKey().notNull(),
   latestBlock: bigint("latest_block", { mode: "bigint" }),
+  confirmations: integer("confirmations").notNull().default(12),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
@@ -63,4 +64,28 @@ export const solanaIndexedEvents = pgTable("solana_indexed_events", {
   primaryKey({ columns: [table.chainId, table.slot, table.eventIndex] }),
   index("idx_solana_events_tree").on(table.chainId, table.slot, table.treeIndex),
   index("idx_solana_events_lookup").on(table.chainId, table.txSignature, table.eventIndexLocal),
+]);
+
+// --- API keys ---
+
+export const apiKeys = pgTable("api_keys", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  keyPrefix: text("key_prefix").notNull(),
+  createdBy: text("created_by").notNull().default("admin"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+});
+
+export const apiUsage = pgTable("api_usage", {
+  id: bigint("id", { mode: "bigint" }).primaryKey().generatedAlwaysAsIdentity(),
+  apiKeyId: integer("api_key_id").notNull().references(() => apiKeys.id),
+  date: text("date").notNull(),
+  coldRequests: integer("cold_requests").notNull().default(0),
+  hotRequests: integer("hot_requests").notNull().default(0),
+  statusRequests: integer("status_requests").notNull().default(0),
+}, (table) => [
+  unique("uq_api_usage_key_date").on(table.apiKeyId, table.date),
 ]);

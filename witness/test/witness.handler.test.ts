@@ -150,7 +150,7 @@ beforeAll(async () => {
   app.use(createWitnessController(db, mockAddJob, MOCK_WITNESS_SIGNER));
   app.listen(API_PORT);
 
-  healthServer = createHealthServer(HEALTH_PORT);
+  healthServer = createHealthServer(HEALTH_PORT, db);
 
   // Wait for servers to be ready
   await new Promise((r) => setTimeout(r, 100));

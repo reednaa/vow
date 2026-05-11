@@ -13,10 +13,17 @@
   let loading = true;
   let error = "";
 
+  $: isSolana = chainId.startsWith("solana:");
+
   let newRpcUrl = "";
   let addingRpc = false;
   let addError = "";
   let addSuccess = "";
+
+  let confirmationsValue = 12;
+  let updatingConfig = false;
+  let configError = "";
+  let configSuccess = "";
 
   onMount(load);
 
@@ -32,6 +39,8 @@
       chain = chains.find((c) => c.chainId === chainId) ?? null;
       if (!chain) {
         error = `Chain ${chainId} not found`;
+      } else {
+        confirmationsValue = chain.confirmations;
       }
       rpcs = rpcList;
       blocks = blockList;
@@ -70,6 +79,22 @@
     }
   }
 
+  async function updateConfirmations() {
+    if (updatingConfig) return;
+    updatingConfig = true;
+    configError = "";
+    configSuccess = "";
+    try {
+      await api.updateChainConfirmations(chainId, confirmationsValue);
+      configSuccess = `Confirmations updated to ${confirmationsValue}`;
+      if (chain) chain.confirmations = confirmationsValue;
+    } catch (e: any) {
+      configError = e.message;
+    } finally {
+      updatingConfig = false;
+    }
+  }
+
   function truncate(hex: string, chars = 10) {
     if (!hex) return "—";
     return hex.slice(0, chars + 2) + "…" + hex.slice(-4);
@@ -102,7 +127,7 @@
   {#if !loading && chain}
     <div class="stat-grid" style="margin-bottom: 24px;">
       <div class="stat-card">
-        <div class="label">Latest Indexed Block</div>
+        <div class="label">{isSolana ? "Latest Indexed Slot" : "Latest Indexed Block"}</div>
         <div class="value mono" style="font-size:18px;">{chain.latestBlock ?? "—"}</div>
       </div>
       <div class="stat-card">
@@ -110,11 +135,43 @@
         <div class="value" style="color: {rpcs.length < 2 ? 'var(--warning)' : 'inherit'}">{rpcs.length}</div>
       </div>
       <div class="stat-card">
-        <div class="label">Recent Indexed Blocks</div>
+        <div class="label">{isSolana ? "Recent Indexed Slots" : "Recent Indexed Blocks"}</div>
         <div class="value">{blocks.length}</div>
       </div>
     </div>
   {/if}
+
+  <!-- Chain Configuration -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+      <h2>Chain Configuration</h2>
+    </div>
+    <div style="padding: 16px 20px;">
+      {#if configError}<div class="alert alert-error">{configError}</div>{/if}
+      {#if configSuccess}<div class="alert alert-success">{configSuccess}</div>{/if}
+      <div class="form-row">
+        <label style="display:flex;align-items:center;gap:8px;">
+          <span>Confirmations required:</span>
+          <input
+            type="number"
+            min="0"
+            bind:value={confirmationsValue}
+            style="width:80px;"
+          />
+          <button
+            class="btn-primary"
+            on:click={updateConfirmations}
+            disabled={updatingConfig || confirmationsValue === chain?.confirmations}
+          >
+            {updatingConfig ? "Saving…" : "Update"}
+          </button>
+        </label>
+      </div>
+      <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">
+        Number of {isSolana ? "slots" : "blocks"} that must be built on top before the service signs an attestation. Set to 0 for immediate signing.
+      </p>
+    </div>
+  </div>
 
   <!-- RPCs -->
   <div class="card" style="margin-bottom: 24px;">
@@ -173,7 +230,7 @@
   <!-- Recent blocks -->
   <div class="card">
     <div class="card-header">
-      <h2>Recent Indexed Blocks</h2>
+      <h2>{isSolana ? "Recent Indexed Slots" : "Recent Indexed Blocks"}</h2>
       <button class="btn-ghost" style="font-size:12px;padding:5px 10px;" on:click={load}>
         Refresh
       </button>
@@ -181,13 +238,13 @@
     {#if loading}
       <div class="empty">Loading…</div>
     {:else if blocks.length === 0}
-      <div class="empty">No indexed blocks yet.</div>
+      <div class="empty">No indexed {isSolana ? "slots" : "blocks"} yet.</div>
     {:else}
       <table>
         <thead>
           <tr>
-            <th>Block</th>
-            <th>Block Hash</th>
+            <th>{isSolana ? "Slot" : "Block"}</th>
+            <th>{isSolana ? "Blockhash" : "Block Hash"}</th>
             <th>Merkle Root</th>
             <th>Indexed At</th>
           </tr>

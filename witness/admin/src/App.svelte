@@ -6,6 +6,8 @@
   import Dashboard from "./pages/Dashboard.svelte";
   import ChainDetail from "./pages/ChainDetail.svelte";
   import Jobs from "./pages/Jobs.svelte";
+  import ApiKeys from "./pages/ApiKeys.svelte";
+  import ApiKeyUsage from "./pages/ApiKeyUsage.svelte";
   import Nav from "./components/Nav.svelte";
 
   let loading = true;
@@ -15,6 +17,8 @@
     "/": Dashboard,
     "/chains/:id": ChainDetail,
     "/jobs": Jobs,
+    "/keys": ApiKeys,
+    "/keys/:id": ApiKeyUsage,
     "*": Dashboard,
   };
 

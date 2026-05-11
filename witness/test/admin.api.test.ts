@@ -13,9 +13,11 @@ import {
 import { createAdminApiPlugin } from "../src/api/admin/api";
 import { normalizeChainId } from "../src/core/chain-utils";
 
+import { getSolanaLatestSlots, getSolanaLatestSlot } from "../src/db/queries";
+
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const JWT_SECRET = "test-secret-for-admin-api";
-const SOLANA_CHAIN_ALIAS = "solana:devnet";
+const SOLANA_CHAIN_ALIAS = "solana:8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR";
 const SOLANA_CHAIN_ID = normalizeChainId(SOLANA_CHAIN_ALIAS);
 const RPC_URL = "http://stub.admin.rpc";
 
@@ -160,6 +162,133 @@ describe("Admin API chain management", () => {
     expect(storedRpcs[0]!.url).toBe(RPC_URL);
   });
 
+  it("inserts chain with custom confirmations value", async () => {
+    const response = await app.handle(
+      makeRequest("/admin/api/chains", {
+        method: "POST",
+        body: JSON.stringify({ chainId: SOLANA_CHAIN_ID, confirmations: 5 }),
+      })
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(body.ok).toBe(true);
+
+    const [storedChain] = await db
+      .select()
+      .from(chains)
+      .where(eq(chains.chainId, SOLANA_CHAIN_ID));
+    expect(storedChain!.confirmations).toBe(5);
+  });
+
+  it("defaults confirmations to 12 when not provided", async () => {
+    const response = await app.handle(
+      makeRequest("/admin/api/chains", {
+        method: "POST",
+        body: JSON.stringify({ chainId: SOLANA_CHAIN_ID }),
+      })
+    );
+    expect(response.status).toBe(200);
+    const [storedChain] = await db
+      .select()
+      .from(chains)
+      .where(eq(chains.chainId, SOLANA_CHAIN_ID));
+    expect(storedChain!.confirmations).toBe(12);
+  });
+
+  it("PATCH /chains/:chainId updates confirmations", async () => {
+    await db.insert(chains).values({ chainId: SOLANA_CHAIN_ID, confirmations: 12 });
+
+    const response = await app.handle(
+      makeRequest(`/admin/api/chains/${SOLANA_CHAIN_ID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ confirmations: 3 }),
+      })
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(body.ok).toBe(true);
+    expect(body.confirmations).toBe(3);
+
+    const [storedChain] = await db
+      .select()
+      .from(chains)
+      .where(eq(chains.chainId, SOLANA_CHAIN_ID));
+    expect(storedChain!.confirmations).toBe(3);
+  });
+
+  it("PATCH /chains/:chainId returns 404 for unknown chain", async () => {
+    // Use a valid Solana genesis hash that isn't seeded in the test DB
+    const nonexistentId = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+    const response = await app.handle(
+      makeRequest(`/admin/api/chains/${nonexistentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ confirmations: 5 }),
+      })
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("GET /chains/:chainId/blocks returns Solana indexed slots", async () => {
+    await db.insert(chains).values({ chainId: SOLANA_CHAIN_ID });
+    await db.insert(solanaIndexedSlots).values({
+      chainId: SOLANA_CHAIN_ID,
+      slot: 100n,
+      blockhash: "solana-blockhash",
+      merkleRoot: "0x" + "ff".repeat(32),
+      latestSlotAtIndex: 105n,
+      signature: "0x" + "ee".repeat(64),
+    });
+
+    const response = await app.handle(
+      makeRequest(`/admin/api/chains/${SOLANA_CHAIN_ALIAS}/blocks`)
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(Array.isArray(body)).toBe(true);
+    expect(body).toHaveLength(1);
+    expect(body[0].blockNumber).toBe("100");
+    expect(body[0].blockHash).toBe("solana-blockhash");
+    expect(body[0].latestBlockAtIndex).toBe("105");
+  });
+
+  it("GET /stats includes Solana slot and event counts", async () => {
+    await db.insert(chains).values({ chainId: SOLANA_CHAIN_ID });
+    await db.insert(solanaIndexedSlots).values({
+      chainId: SOLANA_CHAIN_ID,
+      slot: 200n,
+      blockhash: "hash",
+      merkleRoot: "0x" + "11".repeat(32),
+      latestSlotAtIndex: 250n,
+      signature: "0x" + "22".repeat(64),
+    });
+    await db.insert(solanaIndexedEvents).values({
+      chainId: SOLANA_CHAIN_ID,
+      slot: 200n,
+      txSignature: "stats-solana-tx",
+      eventIndexLocal: 0,
+      eventIndex: 0,
+      treeIndex: 0,
+      leafHash: "0x" + "33".repeat(32),
+      canonicalBytes: "beef",
+    });
+    await db.insert(solanaIndexedEvents).values({
+      chainId: SOLANA_CHAIN_ID,
+      slot: 200n,
+      txSignature: "stats-solana-tx",
+      eventIndexLocal: 1,
+      eventIndex: 1,
+      treeIndex: 1,
+      leafHash: "0x" + "44".repeat(32),
+      canonicalBytes: "cafe",
+    });
+
+    const response = await app.handle(makeRequest("/admin/api/stats"));
+    expect(response.status).toBe(200);
+    const body = await response.json() as any;
+    expect(Number(body.indexedBlocks)).toBeGreaterThanOrEqual(1);
+    expect(Number(body.indexedEvents)).toBeGreaterThanOrEqual(2);
+  });
+
   it("deletes Solana indexed rows before removing the chain", async () => {
     await db.insert(chains).values({ chainId: SOLANA_CHAIN_ID });
     await db.insert(rpcs).values({
@@ -208,5 +337,52 @@ describe("Admin API chain management", () => {
     expect(remainingChain).toHaveLength(0);
     expect(remainingSlots).toHaveLength(0);
     expect(remainingEvents).toHaveLength(0);
+  });
+});
+
+// --- db/queries tests (reuses admin DB) ---------------------------------------
+
+const QUERY_CHAIN_1 = "solana:query-chain-111111111111111111111111111111111111";
+const QUERY_CHAIN_2 = "solana:query-chain-222222222222222222222222222222222222";
+
+describe("db/queries (getSolanaLatestSlots / getSolanaLatestSlot)", () => {
+  beforeAll(async () => {
+    await db.delete(solanaIndexedSlots).where(eq(solanaIndexedSlots.chainId, QUERY_CHAIN_1));
+    await db.delete(solanaIndexedSlots).where(eq(solanaIndexedSlots.chainId, QUERY_CHAIN_2));
+    await db.insert(chains).values([{ chainId: QUERY_CHAIN_1 }, { chainId: QUERY_CHAIN_2 }]);
+    await db.insert(solanaIndexedSlots).values([
+      { chainId: QUERY_CHAIN_1, slot: 100n, blockhash: "h1", merkleRoot: "0x00", latestSlotAtIndex: 150n, signature: "0x00" },
+      { chainId: QUERY_CHAIN_1, slot: 200n, blockhash: "h2", merkleRoot: "0x00", latestSlotAtIndex: 250n, signature: "0x00" },
+      { chainId: QUERY_CHAIN_2, slot: 500n, blockhash: "h3", merkleRoot: "0x00", latestSlotAtIndex: 550n, signature: "0x00" },
+    ]);
+  });
+
+  afterAll(async () => {
+    await db.delete(solanaIndexedSlots).where(eq(solanaIndexedSlots.chainId, QUERY_CHAIN_1));
+    await db.delete(solanaIndexedSlots).where(eq(solanaIndexedSlots.chainId, QUERY_CHAIN_2));
+    await db.delete(chains).where(eq(chains.chainId, QUERY_CHAIN_1));
+    await db.delete(chains).where(eq(chains.chainId, QUERY_CHAIN_2));
+  });
+
+  it("returns empty map for empty input", async () => {
+    const result = await getSolanaLatestSlots(db, []);
+    expect(result.size).toBe(0);
+  });
+
+  it("returns latest slot per chain", async () => {
+    const result = await getSolanaLatestSlots(db, [QUERY_CHAIN_1, QUERY_CHAIN_2]);
+    expect(result.size).toBe(2);
+    expect(result.get(QUERY_CHAIN_1)).toBe(250n);
+    expect(result.get(QUERY_CHAIN_2)).toBe(550n);
+  });
+
+  it("getSolanaLatestSlot returns max for single chain", async () => {
+    const result = await getSolanaLatestSlot(db, QUERY_CHAIN_1);
+    expect(result).toBe(250n);
+  });
+
+  it("getSolanaLatestSlot returns null when no slots exist", async () => {
+    const result = await getSolanaLatestSlot(db, "solana:nonexistent-chain-000000000000000");
+    expect(result).toBeNull();
   });
 });

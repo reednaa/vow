@@ -32,7 +32,7 @@ export function createIndexSolanaSlotTask(
   signer: Signer,
   fetchSlot?: FetchSlotFn,
 ): Task {
-  return async (payload) => {
+  return async (payload, helpers) => {
     const { chainId, slot } = payload as IndexSolanaSlotPayload;
     const slotBigInt = BigInt(slot);
 
@@ -77,6 +77,50 @@ export function createIndexSolanaSlotTask(
           console.log(
             `[index-solana-slot] ${elapsed()} slot fetched blockhash=${consistent.blockhash} events=${consistent.events.length} latestSlot=${consistent.latestSlot}`,
           );
+
+          // Finality check: slot must have enough confirmations before signing.
+          // If not, re-enqueue with a delay instead of throwing — avoids maxAttempts
+          // exhaustion and wastes no RPC calls on immediate retries.
+          const [chainRow] = await db
+            .select({ confirmations: chains.confirmations })
+            .from(chains)
+            .where(eq(chains.chainId, chainId));
+
+          const requiredConfirmations = chainRow?.confirmations ?? 12;
+
+          if (consistent.latestSlot < slotBigInt) {
+            console.log(
+              `[index-solana-slot] ${elapsed()} slot ${slot} ahead of tip ${consistent.latestSlot} — re-enqueuing in 30s`,
+            );
+            await helpers.addJob(
+              INDEX_SOLANA_SLOT_TASK,
+              { chainId, slot },
+              {
+                jobKey: `solana-index:${chainId}:${slot}`,
+                runAt: new Date(Date.now() + 30_000),
+              },
+            );
+            return;
+          }
+
+          const confirmationsAchieved = consistent.latestSlot - slotBigInt;
+
+          if (confirmationsAchieved < requiredConfirmations) {
+            const remaining = requiredConfirmations - Number(confirmationsAchieved);
+            const delayMs = Math.min(remaining * 5_000, 120_000);
+            console.log(
+              `[index-solana-slot] ${elapsed()} slot ${slot} has ${confirmationsAchieved}/${requiredConfirmations} confirmations — re-enqueuing in ${delayMs}ms`,
+            );
+            await helpers.addJob(
+              INDEX_SOLANA_SLOT_TASK,
+              { chainId, slot },
+              {
+                jobKey: `solana-index:${chainId}:${slot}`,
+                runAt: new Date(Date.now() + delayMs),
+              },
+            );
+            return;
+          }
 
           // Handle empty slot
           if (consistent.events.length === 0) {
