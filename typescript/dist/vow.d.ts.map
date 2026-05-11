@@ -1,0 +1,1 @@
+{"version":3,"file":"vow.d.ts","sourceRoot":"","sources":["../src/vow.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,KAAK,GAAG,EAAkB,MAAM,MAAM,CAAC;AAGhD,OAAO,KAAK,EAAE,aAAa,EAAsC,MAAM,YAAY,CAAC;AA2CpF,wBAAgB,cAAc,CAAC,SAAS,EAAE,aAAa,EAAE,GAAG,aAAa,EAAE,CA2B1E;AAED,wBAAgB,SAAS,CAAC,SAAS,EAAE,aAAa,EAAE,GAAG,GAAG,CA2CzD"}

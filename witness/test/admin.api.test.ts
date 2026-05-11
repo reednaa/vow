@@ -11,7 +11,7 @@ import {
   solanaIndexedSlots,
 } from "../src/db/schema";
 import { createAdminApiPlugin } from "../src/api/admin/api";
-import { normalizeChainId } from "../src/core/chain-utils";
+import { normalizeChainId } from "@vow/protocol";
 
 import { getSolanaLatestSlots, getSolanaLatestSlot } from "../src/db/queries";
 

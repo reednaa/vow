@@ -1,4 +1,4 @@
-import { type Hex, keccak256, toBytes, toHex, concat } from "viem";
+import { type Hex, keccak256, toBytes } from "viem";
 
 function sortPair(a: Hex, b: Hex): [Hex, Hex] {
   return BigInt(a) <= BigInt(b) ? [a, b] : [b, a];
@@ -19,8 +19,9 @@ export function buildMerkleTree(leaves: Hex[]): { root: Hex; tree: Hex[][] } {
     return { root: ZERO_HASH, tree: [[ZERO_HASH]] };
   }
 
-  // Sort ascending
-  const sorted = [...leaves].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0));
+  const sorted = [...leaves].sort((a, b) =>
+    BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0,
+  );
 
   const tree: Hex[][] = [sorted];
   let current = sorted;
@@ -31,7 +32,6 @@ export function buildMerkleTree(leaves: Hex[]): { root: Hex; tree: Hex[][] } {
       if (i + 1 < current.length) {
         next.push(hashPair(current[i]!, current[i + 1]!));
       } else {
-        // Odd node: promote as-is
         next.push(current[i]!);
       }
     }
@@ -53,7 +53,6 @@ export function generateProof(tree: Hex[][], leafIndex: number): Hex[] {
     if (siblingIndex < levelNodes.length) {
       proof.push(levelNodes[siblingIndex]!);
     }
-    // If no sibling (odd unpaired node), skip — node promoted as-is
 
     index = Math.floor(index / 2);
   }
@@ -67,4 +66,17 @@ export function verifyProof(root: Hex, leaf: Hex, proof: Hex[]): boolean {
     current = hashPair(current, sibling);
   }
   return current.toLowerCase() === root.toLowerCase();
+}
+
+export type StoredLeaf = {
+  leafHash: string;
+  treeIndex: number;
+};
+
+export function buildStoredEventProof(events: readonly StoredLeaf[], treeIndex: number): Hex[] {
+  const sortedEvents = [...events].sort((a, b) => a.treeIndex - b.treeIndex);
+  const leafHashes = sortedEvents.map((event) => event.leafHash as Hex);
+  const { tree } = buildMerkleTree(leafHashes);
+
+  return generateProof(tree, treeIndex);
 }

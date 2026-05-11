@@ -6,10 +6,15 @@ import { createDb, closeDb } from "../src/db/client";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../src/db/schema";
 import { createWitnessController } from "../src/api/witness.handler";
 import { createHealthServer } from "../src/api/health.server";
-import { encodeEvent, computeLeafHash } from "../src/core/encoding";
-import { buildMerkleTree, generateProof, verifyProof } from "../src/core/merkle";
+import {
+  buildMerkleTree,
+  caip2ToNumericChainId,
+  computeLeafHash,
+  encodeEthereumEvent as encodeEvent,
+  generateProof,
+  verifyProof,
+} from "@vow/protocol";
 import { createEnvSigner } from "../src/core/signing";
-import { caip2ToNumericChainId } from "../src/core/chain-utils";
 
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const TEST_CHAIN_ID = "eip155:99992";

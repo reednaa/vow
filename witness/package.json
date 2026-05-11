@@ -7,14 +7,16 @@
     "vow-witness": "src/cli.ts"
   },
   "scripts": {
-    "start": "bun src/index.ts",
-    "start:api": "bun src/entrypoints/api.ts",
-    "start:worker": "bun src/entrypoints/worker.ts",
+    "build:sdk": "bun run --cwd ../typescript build",
+    "start": "bun run build:sdk && bun src/index.ts",
+    "start:api": "bun run build:sdk && bun src/entrypoints/api.ts",
+    "start:worker": "bun run build:sdk && bun src/entrypoints/worker.ts",
     "start:migrate": "bun src/entrypoints/migrate.ts",
-    "dev": "bun --hot src/index.ts",
+    "dev": "bun run build:sdk && bun --hot src/index.ts",
     "dev:admin": "cd admin && bun run dev",
     "build:admin": "cd admin && bun run build",
-    "test": "bun test",
+    "check": "bun run build:sdk && bunx tsc --noEmit",
+    "test": "bun run build:sdk && bun test",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bunx drizzle-kit migrate",
     "db:push": "bunx drizzle-kit push"
@@ -27,6 +29,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@vow/protocol": "file:../typescript",
     "@elysiajs/jwt": "^1.4.1",
     "@elysiajs/static": "^1.4.7",
     "@elysiajs/swagger": "^1.3.1",

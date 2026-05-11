@@ -4,7 +4,7 @@ import { createDb } from "../src/db/client.ts";
 import { rpcs } from "../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 import { createSolanaRpcClient, extractEmitCpiEvents } from "../src/rpc/solana-client.ts";
-import { isEmitCpi, extractEmitCpiEncoding, decodeSolanaEvent } from "../src/core/solana-encoding.ts";
+import { isEmitCpi, extractEmitCpiEncoding, decodeSolanaEvent } from "@vow/protocol";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://vow:vow@localhost:5433/vow_witness";
 const CHAIN_ID = process.env.CHAIN_ID || "solana:mainnet";
@@ -78,9 +78,9 @@ async function main() {
         // Decode canonical for comparison display
         const dec = decodeSolanaEvent(enc.canonicalBytes);
         console.log(`  canonical decoded:`);
-        console.log(`    programId:     ${toHex(dec.programId)}`);
-        console.log(`    discriminator: ${toHex(dec.discriminator)}`);
-        console.log(`    data:          ${toHex(dec.data)}`);
+        console.log(`    programId:     ${dec.programId}`);
+        console.log(`    discriminator: ${dec.discriminator}`);
+        console.log(`    data:          ${dec.data}`);
         console.log();
         eventsFound++;
       }

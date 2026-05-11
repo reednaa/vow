@@ -2,8 +2,11 @@ import { describe, it, expect } from "bun:test";
 import bs58 from "bs58";
 import { type Address, type Hex, toHex } from "viem";
 import { type RpcClient } from "../src/rpc/client";
-import { EVENT_IX_TAG } from "../src/core/solana-encoding";
-import { encodeEvent, computeLeafHash } from "../src/core/encoding";
+import {
+  computeLeafHash,
+  encodeEthereumEvent as encodeEvent,
+  EVENT_IX_TAG,
+} from "@vow/protocol";
 import { fetchBlockConsistent, fetchSolanaSlotConsistent } from "../src/rpc/consistency";
 import type { SolanaBlock, SolanaRpcClient } from "../src/rpc/solana-client";
 

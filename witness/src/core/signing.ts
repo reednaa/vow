@@ -1,35 +1,6 @@
-import {
-  type Hex,
-  hashTypedData,
-  parseSignature,
-  serializeCompactSignature,
-  signatureToCompactSignature,
-} from "viem";
+import { signVowRoot, type VowParams } from "@vow/protocol";
 import { privateKeyToAccount } from "viem/accounts";
-import type { Signer, VowParams } from "./signer.interface.ts";
-
-const VOW_DOMAIN = {} as const;
-
-const VOW_TYPES = {
-  Vow: [
-    { name: "chainId", type: "uint256" },
-    { name: "rootBlockNumber", type: "uint256" },
-    { name: "root", type: "bytes32" },
-  ],
-} as const;
-
-export function computeVowDigest(params: VowParams): Hex {
-  return hashTypedData({
-    domain: VOW_DOMAIN,
-    types: VOW_TYPES,
-    primaryType: "Vow",
-    message: {
-      chainId: params.chainId,
-      rootBlockNumber: params.rootBlockNumber,
-      root: params.root,
-    },
-  });
-}
+import type { Signer } from "./signer.interface.ts";
 
 export function createEnvSigner(privateKeyHex: string): Signer {
   const withPrefix = privateKeyHex.startsWith("0x")
@@ -40,17 +11,7 @@ export function createEnvSigner(privateKeyHex: string): Signer {
 
   return {
     async signVow(params: VowParams) {
-      const signature = await account.signTypedData({
-        domain: VOW_DOMAIN,
-        types: VOW_TYPES,
-        primaryType: "Vow",
-        message: {
-          chainId: params.chainId,
-          rootBlockNumber: params.rootBlockNumber,
-          root: params.root,
-        },
-      });
-      return serializeCompactSignature(signatureToCompactSignature(parseSignature(signature)));
+      return signVowRoot(params, (typedData) => account.signTypedData(typedData));
     },
     address() {
       return account.address;

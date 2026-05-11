@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { eq, count } from "drizzle-orm";
+import { normalizeChainId } from "@vow/protocol";
 import { chains, rpcs } from "../db/schema.ts";
-import { normalizeChainId } from "../core/chain-utils.ts";
 import { getSolanaLatestSlots, getSolanaLatestSlot } from "../db/queries.ts";
 import type { Db } from "../db/client.ts";
 

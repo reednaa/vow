@@ -1,14 +1,17 @@
 import { Elysia } from "elysia";
 import { eq, and } from "drizzle-orm";
 import type { Hex } from "viem";
+import {
+  buildStoredEventProof,
+  decodeSolanaEvent,
+  normalizeChainId,
+  recoverVowSigner,
+} from "@vow/protocol";
 import { chains, solanaIndexedSlots, solanaIndexedEvents, rpcs } from "../db/schema.ts";
 import type { Db } from "../db/client.ts";
-import { decodeSolanaEvent } from "../core/solana-encoding.ts";
-import { normalizeChainId } from "../core/chain-utils.ts";
 import { INDEX_SOLANA_SLOT_TASK } from "../worker/index-solana-slot.task.ts";
 import { createSolanaRpcClient } from "../rpc/solana-client.ts";
 import { solanaWitnessParams, solanaWitnessResponse } from "./model.ts";
-import { buildStoredEventProof, recoverVowSigner } from "./proof.ts";
 import { type AddJobFn, enqueueIndexingJob } from "./jobs.ts";
 import { type ApiKeyContext } from "./api-key.middleware.ts";
 import { trackUsage } from "./usage-tracker.ts";
@@ -141,9 +144,9 @@ export function createSolanaWitnessController(
             proof,
             signature: slot.signature,
             event: {
-              programId: Buffer.from(_programId).toString("hex"),
-              discriminator: Buffer.from(discriminator).toString("hex"),
-              data: Buffer.from(data).toString("hex"),
+              programId: _programId,
+              discriminator,
+              data,
             },
           },
         };

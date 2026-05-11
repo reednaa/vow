@@ -4,16 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
+    "build:sdk": "bun run --cwd ../typescript build",
+    "dev": "bun run build:sdk && vite dev",
+    "build": "bun run build:sdk && vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "check": "bun run build:sdk && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "bun run build:sdk && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
-    "test": "playwright test"
+    "test": "bun run build:sdk && playwright test"
   },
   "dependencies": {
+    "@vow/protocol": "file:../typescript",
     "bs58": "^6.0.0",
     "viem": "~2.45.1"
   },

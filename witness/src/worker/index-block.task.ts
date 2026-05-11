@@ -1,12 +1,11 @@
 import { type Task } from "graphile-worker";
 import { eq, sql } from "drizzle-orm";
-import { caip2ToNumericChainId } from "../core/chain-utils.ts";
 import { type Hex } from "viem";
 import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 import { createRpcClient, type RpcClient } from "../rpc/client.ts";
 import { instrumentRpcClient } from "../rpc/instrumented-client.ts";
 import { fetchBlockConsistent, type ConsistentBlockResult } from "../rpc/consistency.ts";
-import { buildMerkleTree, ZERO_HASH } from "../core/merkle.ts";
+import { buildMerkleTree, caip2ToNumericChainId, ZERO_HASH } from "@vow/protocol";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../db/schema.ts";
 import type { Signer } from "../core/signer.interface.ts";
 import type { createDb } from "../db/client.ts";

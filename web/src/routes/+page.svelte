@@ -1,8 +1,15 @@
 <script lang="ts">
-  import { ETHEREUM_MAINNET_CHAIN_ID, SOLANA_MAINNET_CHAIN_ID } from "$lib/chain.js";
-  import { encodeVow } from "$lib/encoding.js";
-  import { callProcessVow, decodeVowEvent, getDirectorySigner } from "$lib/contract.js";
-  import { pollWitness } from "$lib/witnessClient.js";
+  import {
+    decodeVowEvent,
+    encodeVow,
+    ETHEREUM_MAINNET_CHAIN_ID,
+    getDirectorySigner,
+    pollWitness,
+    processVow,
+    SOLANA_MAINNET_CHAIN_ID,
+    type EstimateContractGasFn,
+    type ReadContractFn,
+  } from "@vow/protocol";
   import type {
     DecodedEthereumEvent,
     DecodedSolanaEvent,
@@ -15,7 +22,7 @@
     WitnessResult,
     WitnessSource,
   } from "$lib/types.js";
-  import type { Address, Hex } from "viem";
+  import { createPublicClient, http, type Address, type Hex } from "viem";
 
   const DEFAULT_WITNESS_DIRECTORY = "0x0bCd1123AfB2088084847bF4B4b10C2B2dfa5963";
   const DEFAULT_MOCK_VOW_LIB = "0xb58fB4D3eA84Eb4845Fc7e1CC727b307f26fd856";
@@ -172,6 +179,10 @@
     const request = buildWitnessRequest();
 
     try {
+      const client = createPublicClient({ transport: http(rpcUrl) });
+      const readContract = client.readContract as unknown as ReadContractFn;
+      const estimateContractGas = client.estimateContractGas as unknown as EstimateContractGasFn;
+
       const settled = await Promise.allSettled(
         witnessSources.map((src, i) =>
           pollWitness(src.url, request, {
@@ -222,7 +233,7 @@
         witnessSources.map(async (src, i) => {
           const witness = readyWitnesses[i]!;
           const onChainSigner = await getDirectorySigner(
-            rpcUrl,
+            readContract,
             directoryAddress as Address,
             src.signerIndex
           );
@@ -288,24 +299,29 @@
 
       setStep(3, "running");
 
-      const processVowCall = await callProcessVow(
-        rpcUrl,
-        mockVowLibAddress as Address,
-        directoryAddress as Address,
-        vowHex
-      );
+      const processVowCall = await processVow({
+        readContract,
+        estimateContractGas,
+        vowLibAddress: mockVowLibAddress as Address,
+        directoryAddress: directoryAddress as Address,
+        vowBytes: vowHex,
+      });
 
-      processVowGasEstimate = processVowCall.gasEstimate;
-      setStep(3, "done", `${processVowGasEstimate.toString()} gas`);
+      processVowGasEstimate = processVowCall.gasEstimate ?? null;
+      setStep(
+        3,
+        "done",
+        processVowGasEstimate === null ? "n/a" : `${processVowGasEstimate.toString()} gas`
+      );
 
       setStep(4, "running");
 
-      const decodedEvent = await decodeVowEvent(
-        rpcUrl,
-        mockVowLibAddress as Address,
-        sourceMode,
-        processVowCall.processVowResult.evt
-      );
+      const decodedEvent = await decodeVowEvent({
+        readContract,
+        vowLibAddress: mockVowLibAddress as Address,
+        mode: sourceMode,
+        evt: processVowCall.processVowResult.evt,
+      });
 
       decodedVowResult =
         sourceMode === "ethereum"

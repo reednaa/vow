@@ -1,4 +1,7 @@
-import base58 from "bs58";
+import bs58 from "bs58";
+
+export const ETHEREUM_MAINNET_CHAIN_ID = "eip155:1";
+export const SOLANA_MAINNET_CHAIN_ID = "solana:mainnet";
 
 export const SOLANA_CHAIN_ID_ALIASES = {
   mainnet: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
@@ -12,13 +15,15 @@ const SOLANA_CAIP2_RE = /^solana:(.+)$/;
 function decodeSolanaGenesisHash(chainId: string, genesisHash: string): Uint8Array {
   let decoded: Uint8Array;
   try {
-    decoded = base58.decode(genesisHash);
+    decoded = bs58.decode(genesisHash);
   } catch {
     throw new Error(`Invalid Solana genesis hash for ${chainId}`);
   }
+
   if (decoded.length !== 32) {
     throw new Error(`Invalid Solana genesis hash length for ${chainId}: ${decoded.length} bytes`);
   }
+
   return decoded;
 }
 
@@ -32,22 +37,13 @@ export function normalizeChainId(chainId: string): string {
 
   const clusterOrGenesisHash = solMatch[1];
   const aliasedChainId =
-    SOLANA_CHAIN_ID_ALIASES[
-      clusterOrGenesisHash as keyof typeof SOLANA_CHAIN_ID_ALIASES
-    ];
+    SOLANA_CHAIN_ID_ALIASES[clusterOrGenesisHash as keyof typeof SOLANA_CHAIN_ID_ALIASES];
   if (aliasedChainId) return aliasedChainId;
 
   decodeSolanaGenesisHash(chainId, clusterOrGenesisHash);
   return `solana:${clusterOrGenesisHash}`;
 }
 
-/**
- * Extracts a numeric chain ID (bigint) from a CAIP-2 string for use in
- * EIP-712 signing and witness binary encoding.
- *
- * EVM: "eip155:1" → 1n
- * Solana: "solana:<genesis-hash>" → BigInt from 32-byte decoded genesis hash (big-endian)
- */
 export function caip2ToNumericChainId(chainId: string): bigint {
   let normalizedChainId: string;
   try {
@@ -55,6 +51,7 @@ export function caip2ToNumericChainId(chainId: string): bigint {
   } catch {
     throw new Error(`Cannot extract numeric chain ID from: ${chainId}`);
   }
+
   const evmMatch = EVM_CAIP2_RE.exec(normalizedChainId);
   if (evmMatch && evmMatch[1]) return BigInt(evmMatch[1]);
 

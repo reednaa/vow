@@ -1,5 +1,5 @@
 import bs58 from "bs58";
-import { toHex } from "viem";
+import { toBytes, toHex } from "viem";
 import { createDb } from "../src/db/client.ts";
 import { rpcs } from "../src/db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -14,7 +14,7 @@ import {
   isEmitCpi,
   extractEmitCpiEncoding,
   EVENT_IX_TAG,
-} from "../src/core/solana-encoding.ts";
+} from "@vow/protocol";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -315,22 +315,24 @@ async function main() {
 
     // programId (bytes 0-31)
     console.log(
-      showByteDiff("programId (32 bytes)", dec0.programId, dec1.programId, 0, 32),
+      showByteDiff("programId (32 bytes)", toBytes(dec0.programId), toBytes(dec1.programId), 0, 32),
     );
 
     // discriminator (bytes 32-39)
     console.log(
-      showByteDiff("discriminator (8 bytes)", dec0.discriminator, dec1.discriminator, 0, 8),
+      showByteDiff("discriminator (8 bytes)", toBytes(dec0.discriminator), toBytes(dec1.discriminator), 0, 8),
     );
 
     // data
     console.log(
       `  data:`,
     );
-    console.log(`    RPC 0 length=${dec0.data.length}, hex=${hex(dec0.data, 64)}`);
-    console.log(`    RPC 1 length=${dec1.data.length}, hex=${hex(dec1.data, 64)}`);
-    if (dec0.data.length !== dec1.data.length) {
-      console.log(`    length DIFF ✗ (${dec0.data.length} vs ${dec1.data.length})`);
+    const data0 = toBytes(dec0.data);
+    const data1 = toBytes(dec1.data);
+    console.log(`    RPC 0 length=${data0.length}, hex=${hex(data0, 64)}`);
+    console.log(`    RPC 1 length=${data1.length}, hex=${hex(data1, 64)}`);
+    if (data0.length !== data1.length) {
+      console.log(`    length DIFF ✗ (${data0.length} vs ${data1.length})`);
     }
     console.log();
 

@@ -1,10 +1,7 @@
 import type { Hex } from "viem";
+import type { VowParams } from "@vow/protocol";
 
-export type VowParams = {
-  chainId: bigint;
-  rootBlockNumber: bigint;
-  root: Hex;
-};
+export type { VowParams };
 
 export interface Signer {
   signVow(params: VowParams): Promise<Hex>;
