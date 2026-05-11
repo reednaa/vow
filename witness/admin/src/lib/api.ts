@@ -134,6 +134,9 @@ export const api = {
 
   getJobs: () => req<Job[]>("/admin/api/jobs"),
 
+  requeueJob: (id: string) =>
+    req<{ ok: boolean }>(`/admin/api/jobs/${id}/requeue`, { method: "POST" }),
+
   createKey: (name: string) =>
     req<ApiKeyCreateResult>("/admin/api/keys", {
       method: "POST",

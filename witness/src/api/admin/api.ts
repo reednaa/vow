@@ -306,6 +306,19 @@ export function createAdminApiPlugin(db: Db, jwtSecret: string) {
         id: String(job.id),
       }));
     })
+    .post("/jobs/:id/requeue", async ({ params, set }) => {
+      const id = BigInt(params.id);
+      const updated = await db
+        .update(graphileWorkerPrivateJobs)
+        .set({ lockedAt: null, attempts: 0 })
+        .where(eq(graphileWorkerPrivateJobs.id, id))
+        .returning({ id: graphileWorkerPrivateJobs.id });
+      if (updated.length === 0) {
+        set.status = 404;
+        return { error: "Job not found" };
+      }
+      return { ok: true };
+    })
 
     // ── Indexed blocks per chain ──────────────────────────────────────────────
     .get("/chains/:chainId/blocks", async ({ params, set }) => {

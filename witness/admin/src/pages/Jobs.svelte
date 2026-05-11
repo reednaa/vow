@@ -48,6 +48,15 @@
   }
 
   let expanded: string | null = null;
+
+  async function requeue(job: Job) {
+    try {
+      await api.requeueJob(job.id);
+      await load();
+    } catch (e: any) {
+      error = e.message;
+    }
+  }
 </script>
 
 <div class="page">
@@ -123,6 +132,17 @@
                     {/if}
                     {#if job.lockedAt}
                       <div><span style="color:var(--text-muted);">Locked at: </span>{relativeTime(job.lockedAt)}</div>
+                    {/if}
+                    {#if job.status === "running" || job.status === "failed"}
+                      <div style="margin-top:8px;">
+                        <button
+                          class="btn-ghost"
+                          style="font-size:12px;padding:5px 10px;"
+                          on:click|stopPropagation={() => requeue(job)}
+                        >
+                          Re-queue
+                        </button>
+                      </div>
                     {/if}
                   </div>
                 </td>
