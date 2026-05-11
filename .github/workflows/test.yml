@@ -69,6 +69,10 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+
+      - name: Run Forge build
+        run: |
+          forge build
       - name: Install dependencies
         working-directory: witness
         run: |
