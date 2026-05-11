@@ -9,7 +9,7 @@ export interface ApiKeyContext {
 }
 
 export function createApiKeyDerive(db: Db) {
-  return async ({ request, set }: { request: Request; set: { status: number } }): Promise<{ apiKey: ApiKeyContext }> => {
+  return async ({ request, set }: { request: Request; set: any }): Promise<{ apiKey: ApiKeyContext }> => {
     let rawKey: string | null = null;
 
     const authHeader = request.headers.get("authorization");

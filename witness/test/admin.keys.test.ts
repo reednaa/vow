@@ -9,7 +9,7 @@ import { trackUsage } from "../src/api/usage-tracker";
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 
 let db: ReturnType<typeof createDb>;
-let app: ReturnType<typeof createApiKeyRoutes>;
+let app: any;
 
 function makeRequest(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
@@ -211,7 +211,7 @@ describe("trackUsage", () => {
 
   it("is a no-op when apiKeyId is null", async () => {
     const prev = await db.select({ count: apiUsage.id }).from(apiUsage);
-    const prevCount = prev[0]?.count ?? 0;
+    const prevCount = prev[0]?.count ?? 0n;
     await trackUsage(db, null, "cold");
     const after = await db.select({ count: apiUsage.id }).from(apiUsage);
     expect(after[0]?.count).toBe(prevCount);
