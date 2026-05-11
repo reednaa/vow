@@ -23,7 +23,7 @@ export async function setupWorker(options: {
   const runner = await run({
     connectionString: databaseUrl,
     schema: workerSchema,
-    concurrency: 3,
+    concurrency: 1,
     taskList: {
       [INDEX_BLOCK_TASK]: createIndexBlockTask(db, signer, fetchBlock),
       [INDEX_SOLANA_SLOT_TASK]: createIndexSolanaSlotTask(db, signer, fetchSolanaSlot),
