@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { eq, and } from "drizzle-orm";
 import { type Address, type Hex } from "viem";
-import { Elysia } from "elysia";
 import { createDb, closeDb } from "../src/db/client";
 import { chains, rpcs, indexedBlocks, indexedEvents } from "../src/db/schema";
-import { createWitnessController } from "../src/api/witness.handler";
-import { createHealthServer } from "../src/api/health.server";
+import { createApiServer } from "../src/api/server";
 import {
   buildMerkleTree,
   caip2ToNumericChainId,
@@ -19,7 +17,6 @@ import { createEnvSigner } from "../src/core/signing";
 const DATABASE_URL = "postgresql://vow:vow@localhost:5433/vow_witness";
 const TEST_CHAIN_ID = "eip155:99992";
 const API_PORT = 13001;
-const HEALTH_PORT = 13002;
 
 // Anvil key #0
 const ANVIL_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -53,15 +50,7 @@ const MOCK_LOGS: Array<{ address: Address; topics: Hex[]; data: Hex; logIndex: n
 ];
 
 let db: ReturnType<typeof createDb>;
-let app = new Elysia().onError(({ error, code, set }) => {
-  if (code === "VALIDATION") {
-    set.status = 400;
-    return { error: error.message };
-  }
-  set.status = 500;
-  return { error: String(error) };
-});
-let healthServer: ReturnType<typeof createHealthServer>;
+let app: ReturnType<typeof createApiServer>;
 const BASE_URL = `http://localhost:${API_PORT}`;
 
 beforeAll(async () => {
@@ -152,10 +141,7 @@ beforeAll(async () => {
 
   // Start API server
   const mockAddJob = async () => ({} as any);
-  app.use(createWitnessController(db, mockAddJob, MOCK_WITNESS_SIGNER));
-  app.listen(API_PORT);
-
-  healthServer = createHealthServer(HEALTH_PORT, db);
+  app = createApiServer(API_PORT, db, mockAddJob, MOCK_WITNESS_SIGNER);
 
   // Wait for servers to be ready
   await new Promise((r) => setTimeout(r, 100));
@@ -163,7 +149,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try { app.stop(); } catch {}
-  try { healthServer.stop(); } catch {}
   await db.delete(indexedEvents).where(eq(indexedEvents.chainId, TEST_CHAIN_ID));
   await db.delete(indexedBlocks).where(eq(indexedBlocks.chainId, TEST_CHAIN_ID));
   await db.delete(rpcs).where(eq(rpcs.chainId, TEST_CHAIN_ID));
@@ -260,7 +245,7 @@ describe("GET /witness", () => {
 
 describe("GET /health", () => {
   it("returns 200 ok", async () => {
-    const res = await fetch(`http://localhost:${HEALTH_PORT}/health`);
+    const res = await fetch(`${BASE_URL}/health`);
     expect(res.status).toBe(200);
     const body = await res.json() as any;
     expect(body.status).toBe("ok");

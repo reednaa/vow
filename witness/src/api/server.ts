@@ -5,6 +5,7 @@ import { mountSolanaWitnessHandler } from "./solana-witness.handler.ts";
 import { createAdminHandler } from "./admin/index.ts";
 import { mountChainsHandler } from "./chains.handler.ts";
 import { createApiKeyDerive } from "./api-key.middleware.ts";
+import { checkDb } from "./health.server.ts";
 import type { Db } from "../db/client.ts";
 import type { AddJobFn } from "./jobs.ts";
 
@@ -72,6 +73,13 @@ export function createApiServer(
       }
       set.status = 500;
       return { error: String(error) };
+    })
+    .get("/health", async ({ set }) => {
+      if (!(await checkDb(db))) {
+        set.status = 503;
+        return { status: "db_unavailable" as const };
+      }
+      return { status: "ok" as const };
     })
     .derive(createApiKeyDerive(db));
 

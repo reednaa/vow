@@ -3,7 +3,6 @@ import { makeWorkerUtils } from "graphile-worker";
 import { loadApiConfig } from "../config/env.ts";
 import { createDb, closeDb } from "../db/client.ts";
 import { createApiServer } from "../api/server.ts";
-import { createHealthServer } from "../api/health.server.ts";
 
 async function main() {
   initTelemetry();
@@ -18,7 +17,6 @@ async function main() {
     config.adminPasswordHash,
     config.adminJwtSecret
   );
-  const healthServer = createHealthServer(config.healthPort, db);
 
   console.log("Witness API started on port", config.apiPort);
 
@@ -30,7 +28,6 @@ async function main() {
 
     try {
       apiServer.stop();
-      healthServer.stop();
     } catch {}
 
     try {

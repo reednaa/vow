@@ -310,19 +310,17 @@ When the GET endpoint resolves to `"ready"`:
 
 ### Processes
 
-Two Elysia servers and one Graphile Worker, all running in the same Bun process (or split across processes if needed):
+One Elysia server and one Graphile Worker, running in the same Bun process (or split across processes if needed):
 
-1. **API server** (external-facing): serves `GET /witness/{caip2ChainId}/{blockNumber}/{logIndex}`. This is the only externally exposed endpoint.
-2. **Health server** (internal): serves `GET /health` for worker health checks, liveness, and readiness probes. Runs on a separate port.
-3. **Graphile Worker**: processes `index-block` jobs. Concurrency: 1.
+1. **API server** (external-facing): serves `GET /witness/{caip2ChainId}/{blockNumber}/{logIndex}` and `GET /health`.
+2. **Graphile Worker**: processes `index-block` jobs. Concurrency: 1.
 
 ### Startup Sequence
 
 1. Parse and validate `WITNESS_PRIVATE_KEY`. Derive signer address. Log the address (not the key).
 2. Connect to PostgreSQL via `postgres` driver. Instantiate Drizzle client. Run migrations via `drizzle-orm/migrator` (reads from `./drizzle` folder).
 3. Start Graphile Worker.
-4. Start health server.
-5. Start API server.
+4. Start API server.
 
 ### Graceful Shutdown
 
@@ -418,7 +416,6 @@ Critical: the canonical encoding, leaf hashing, Merkle tree, and EIP-712 signing
 | `WITNESS_PRIVATE_KEY` | Yes | Hex-encoded secp256k1 private key. |
 | `DATABASE_URL` | Yes | PostgreSQL connection string. |
 | `API_PORT` | No | API server port. Default: `3000`. |
-| `HEALTH_PORT` | No | Health server port. Default: `3001`. |
 
 ---
 

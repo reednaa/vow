@@ -41,14 +41,12 @@ export interface CombinedConfig extends AdminConfig {
   witnessPrivateKey: `0x${string}`;
   databaseUrl: string;
   apiPort: number;
-  healthPort: number;
 }
 
 export interface ApiConfig extends AdminConfig {
   witnessSignerAddress: `0x${string}`;
   databaseUrl: string;
   apiPort: number;
-  healthPort: number;
 }
 
 export interface WorkerConfig {
@@ -73,7 +71,6 @@ export function loadCombinedConfig(): CombinedConfig {
     witnessPrivateKey: parsePrivateKey(requireEnv("WITNESS_PRIVATE_KEY")),
     databaseUrl: requireEnv("DATABASE_URL"),
     apiPort: parsePort("API_PORT", 3000),
-    healthPort: parsePort("HEALTH_PORT", 3001),
     ...loadAdminConfig(),
   };
 }
@@ -86,7 +83,6 @@ export function loadApiConfig(): ApiConfig {
     ),
     databaseUrl: requireEnv("DATABASE_URL"),
     apiPort: parsePort("API_PORT", 3000),
-    healthPort: parsePort("HEALTH_PORT", 3001),
     ...loadAdminConfig(),
   };
 }

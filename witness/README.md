@@ -17,10 +17,9 @@ Protocol-critical TypeScript primitives live in [`../typescript`](../typescript)
 
 Runtime architecture:
 
-1. API server (`GET /witness/:caip2ChainId/:blockNumber/:logIndex` and `GET /witness/solana/:caip2ChainId/:txSignature/:index`)
-2. Health server (`GET /health`)
-3. Graphile Worker (processes `index-block` jobs, concurrency `1`)
-4. PostgreSQL (stores witness data and worker jobs)
+1. API server (`GET /witness/:caip2ChainId/:blockNumber/:logIndex`, `GET /witness/solana/:caip2ChainId/:txSignature/:index`, and `GET /health`)
+2. Graphile Worker (processes `index-block` jobs, concurrency `1`)
+3. PostgreSQL (stores witness data and worker jobs)
 
 EVM request flow:
 
@@ -49,7 +48,6 @@ Solana request flow mirrors the same pattern with transaction-signature lookups,
 - `WITNESS_PRIVATE_KEY` (required for `start` / `start:worker`): 32-byte hex private key (with or without `0x`)
 - `WITNESS_SIGNER_ADDRESS` (required for `start:api`): 20-byte hex address for the configured signer
 - `API_PORT` (optional): API server port, default `3000`
-- `HEALTH_PORT` (optional): health server port, default `3001`
 - `WORKER_HEALTH_PORT` (optional): worker health port for `start:worker`, default `3002`
 
 ## Run Locally
@@ -115,7 +113,7 @@ bun run start:worker
 Health endpoint:
 
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3000/health
 ```
 
 Worker health endpoint (split mode):

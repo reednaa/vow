@@ -4,7 +4,6 @@ import { createEnvSigner } from "./core/signing.ts";
 import { createDb, closeDb } from "./db/client.ts";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { setupWorker } from "./worker/setup.ts";
-import { createHealthServer } from "./api/health.server.ts";
 import { createApiServer } from "./api/server.ts";
 // Import Solana schema so Drizzle includes them in migration metadata
 import "./db/schema.ts";
@@ -29,7 +28,6 @@ async function main() {
     db,
   });
 
-  const healthServer = createHealthServer(config.healthPort, db);
   const apiServer = createApiServer(
     config.apiPort,
     db,
@@ -49,7 +47,6 @@ async function main() {
 
     try {
       apiServer.stop();
-      healthServer.stop();
     } catch {}
 
     const timeout = setTimeout(() => {

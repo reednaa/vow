@@ -214,7 +214,7 @@ beforeAll(async () => {
     address: addresses.witnessDirectory,
     abi: witnessDirectoryArtifact.abi,
     functionName: "setSigner",
-    args: [ANVIL_ADDRESS, 1n, 1n],
+    args: [ANVIL_ADDRESS, 1n, (1n << 40n) - 1n, 1n],
   });
   await publicClient.waitForTransactionReceipt({ hash: registerSignerHash });
 

@@ -31,7 +31,6 @@ WORKDIR /app/witness
 
 ENV NODE_ENV=production
 ENV API_PORT=3000
-ENV HEALTH_PORT=3001
 
 COPY --from=deps /app/typescript /app/typescript
 COPY --from=deps /app/witness/node_modules ./node_modules
@@ -43,6 +42,5 @@ COPY witness/src ./src
 COPY --from=admin-builder /app/public/admin ./public/admin
 
 EXPOSE 3000
-EXPOSE 3001
 
 CMD ["bun", "src/entrypoints/api.ts"]
