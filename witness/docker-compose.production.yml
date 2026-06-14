@@ -2,7 +2,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: witness/Dockerfile
     command: bun run start:migrate
     environment:
       DATABASE_URL: ${DATABASE_URL:?}
@@ -11,8 +11,8 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
-    command: bun run start:api
+      dockerfile: witness/Dockerfile
+    command: bun src/entrypoints/api.ts
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -37,8 +37,8 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile
-    command: bun run start:worker
+      dockerfile: witness/Dockerfile
+    command: bun src/entrypoints/worker.ts
     depends_on:
       migrate:
         condition: service_completed_successfully
